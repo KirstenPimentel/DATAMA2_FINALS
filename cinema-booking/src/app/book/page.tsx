@@ -458,7 +458,7 @@ export default function BookPage() {
         return;
       }
 
-      // Insert ticket
+      // Insert ticket (includes discount_type)
       const minimalTicket: Record<string, any> = {
         customer_name: customerName,
         showtime_id: Number(showtimeId),
@@ -467,6 +467,7 @@ export default function BookPage() {
         ticket_status: "RESERVED",
         ticket_price: originalPrice,
         final_price: total,
+        discount_type: discount, // REGULAR | PWD | SENIOR | STUDENT
       };
 
       const insertRes = await supabase
