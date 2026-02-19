@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Background1975 from "@/components/Background1975";
 
 export const metadata: Metadata = {
   title: "Cinema Booking",
@@ -19,8 +20,10 @@ export default function RootLayout({
           color: "var(--fg)",
           minHeight: "100vh",
           margin: 0,
+          position: "relative", // ensure stacking context above bg
         }}
       >
+        <Background1975 />
         {children}
       </body>
     </html>

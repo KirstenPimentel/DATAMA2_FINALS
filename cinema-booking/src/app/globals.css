@@ -137,3 +137,97 @@ button.btn-1975:hover {
 /* Links */
 a { color: var(--fg); }
 a:hover { opacity: 0.85; }
+
+/* === The 1975 Background FX (bokeh lights + spotlights) === */
+.bg-1975 {
+  position: fixed;
+  inset: 0;
+  z-index: -1;               /* sit behind content */
+  overflow: hidden;
+  pointer-events: none;       /* never capture clicks */
+}
+
+/* --- Bokeh lights layer --- */
+.bokeh-layer {
+  position: absolute;
+  inset: -10%;
+  filter: blur(10px) saturate(110%);
+  opacity: 0.22;              /* subtle */
+  mix-blend-mode: screen;     /* glowy on black */
+}
+
+.bokeh-dot {
+  position: absolute;
+  width: 140px;
+  height: 140px;
+  border-radius: 999px;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), rgba(255,255,255,0.1) 70%, transparent 80%);
+  animation: float-bokeh 16s linear infinite;
+}
+
+/* vary sizes and speeds for depth */
+.bokeh-dot.dot-sm { width: 80px;  height: 80px;  animation-duration: 13s; opacity: 0.18; }
+.bokeh-dot.dot-lg { width: 220px; height: 220px; animation-duration: 22s; opacity: 0.25; }
+
+@keyframes float-bokeh {
+  0%   { transform: translate3d(-10vw, 0, 0) scale(1); }
+  50%  { transform: translate3d(10vw, -2vh, 0) scale(1.05); }
+  100% { transform: translate3d(30vw, 2vh, 0) scale(1); }
+}
+
+/* --- Spotlight cones layer --- */
+.spotlight-layer {
+  position: absolute;
+  inset: 0;
+  opacity: 0.17;              /* keep very subtle */
+}
+
+.spotlight {
+  position: absolute;
+  width: 60vw;
+  height: 60vh;
+  left: 50%;
+  top: 45%;
+  transform: translate(-50%, -50%) rotate(-8deg);
+  /* cone via radial gradient + mask feather */
+  background:
+    radial-gradient(ellipse at 50% 0%,
+      rgba(255,255,255,0.55) 0%,
+      rgba(255,255,255,0.18) 35%,
+      rgba(255,255,255,0.0) 70%);
+  filter: blur(20px);
+  mix-blend-mode: screen;
+  animation: sway 18s ease-in-out infinite;
+}
+
+.spotlight.alt {
+  transform: translate(-50%, -50%) rotate(12deg);
+  width: 55vw;
+  height: 55vh;
+  opacity: 0.9;
+  animation-duration: 22s;
+}
+
+@keyframes sway {
+  0%   { transform: translate(-50%, -50%) rotate(-10deg); }
+  50%  { transform: translate(-50%, -50%) rotate(6deg); }
+  100% { transform: translate(-50%, -50%) rotate(-10deg); }
+}
+
+/* --- Vignette for cinematic edge fade --- */
+.vignette-1975 {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(80% 80% at 50% 50%, rgba(0,0,0,0) 60%, rgba(0,0,0,0.5) 100%);
+  pointer-events: none;
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+  .bokeh-dot,
+  .spotlight {
+    animation: none !important;
+  }
+  .bokeh-layer { opacity: 0.14; }
+  .spotlight-layer { opacity: 0.12; }
+}

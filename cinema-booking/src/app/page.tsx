@@ -1,4 +1,5 @@
-// src/app/page.tsx
+"use client";
+
 import Link from "next/link";
 
 export default function Home() {
@@ -8,35 +9,32 @@ export default function Home() {
         minHeight: "100dvh",
         display: "grid",
         placeItems: "center",
-        background: "#f6f6f6",
+        background: "var(--bg)",   // <-- dark background
+        color: "var(--fg)",        // <-- white text
       }}
     >
       <section
+        className="card-1975"
         style={{
           width: "min(560px, 92vw)",
-          background: "#fff",
-          border: "1px solid #d4d4d4",
-          borderRadius: 6,
-          padding: "36px 40px",
-          boxShadow: "0 2px 0 rgba(0,0,0,0.06)",
+          textAlign: "center",
         }}
       >
         <h1
           style={{
-            textAlign: "center",
             letterSpacing: "0.18em",
             fontWeight: 700,
-            fontSize: 28,
-            color: "#111",
-            marginBottom: 6,
+            fontSize: 24,
+            color: "var(--fg)",
+            marginBottom: 10,
           }}
         >
           CINEMA ADMIN
         </h1>
+
         <p
+          className="muted-1975"
           style={{
-            textAlign: "center",
-            color: "#444",
             marginBottom: 22,
           }}
         >
@@ -52,14 +50,11 @@ export default function Home() {
         >
           <Link
             href="/book"
+            className="btn-1975"
             style={{
-              padding: "10px 14px",
-              border: "1px solid #222",
-              borderRadius: 4,
-              color: "#111",
-              background: "#fff",
-              width: 150,
+              width: 160,
               textAlign: "center",
+              borderColor: "var(--border)",
             }}
           >
             Add Customer
@@ -67,14 +62,11 @@ export default function Home() {
 
           <Link
             href="/admin/summary"
+            className="btn-1975"
             style={{
-              padding: "10px 14px",
-              border: "1px solid #222",
-              borderRadius: 4,
-              color: "#111",
-              background: "#fff",
-              width: 150,
+              width: 160,
               textAlign: "center",
+              borderColor: "var(--border)",
             }}
           >
             Show Summary
