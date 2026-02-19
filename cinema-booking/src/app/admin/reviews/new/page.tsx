@@ -15,6 +15,8 @@ type TicketRow = {
   showtimes?: Showtime | null;
 };
 
+const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+
 export default function NewReviewPage() {
   const router = useRouter();
   const sp = useSearchParams();
@@ -24,12 +26,10 @@ export default function NewReviewPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const [ticket, setTicket] = useState<TicketRow | null>(null);
-
-  // form
-  const [email, setEmail] = useState<string>("");
   const [rating, setRating] = useState<number>(5);
   const [reviewText, setReviewText] = useState<string>("");
 
+  // Load ticket & movie
   useEffect(() => {
     const fetchTicket = async () => {
       if (!ticketIdParam) return;
@@ -63,9 +63,35 @@ export default function NewReviewPage() {
   const movieTitle = ticket?.showtimes?.movies?.title ?? "—";
   const customerName = ticket?.customer_name ?? "—";
 
+  // Check if a review already exists for (movie_id, customer_name)
+  const [hasExisting, setHasExisting] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkExisting = async () => {
+      if (!movieId || !customerName) return;
+      setLoading(true);
+      setErr(null);
+      try {
+        const { data, error } = await supabase
+          .from("reviews")
+          .select("review_id")
+          .eq("movie_id", Number(movieId))
+          // store the customer name in `email` for uniqueness
+          .eq("email", customerName);
+        if (error) throw error;
+        setHasExisting((data ?? []).length > 0);
+      } catch (e: any) {
+        setErr(e?.message ?? "Failed to check existing review.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkExisting();
+  }, [movieId, customerName]);
+
   const canSave = useMemo(() => {
-    return !!movieId && rating >= 1 && rating <= 5;
-  }, [movieId, rating]);
+    return !!movieId && !!customerName && rating >= 1 && rating <= 5 && !hasExisting;
+  }, [movieId, customerName, rating, hasExisting]);
 
   const save = async () => {
     if (!canSave) return;
@@ -76,9 +102,9 @@ export default function NewReviewPage() {
         movie_id: movieId,
         rating,
         review_text: reviewText || null,
+        // use `email` column to store the customer name, so we can enforce one-per-customer
+        email: customerName,
       };
-      // include email only if provided
-      if (email.trim()) insertObj.email = email.trim();
 
       const { error } = await supabase.from("reviews").insert(insertObj);
       if (error) throw error;
@@ -131,44 +157,68 @@ export default function NewReviewPage() {
               <div style={{ fontWeight: 600, marginBottom: 6 }}>Movie</div>
               <div className="muted-1975">{movieTitle}</div>
             </div>
-            <div>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>Email (optional)</div>
-              <input
-                className="input-1975"
-                placeholder="customer@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>Rating (1–5)</div>
-              <select
-                className="select-1975"
-                value={rating}
-                onChange={(e) => setRating(Number(e.target.value))}
-              >
-                {[5,4,3,2,1].map((n) => (
-                  <option key={n} value={n}>{n}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <div style={{ fontWeight: 600, marginBottom: 6 }}>Review (optional)</div>
-              <textarea
-                className="input-1975"
-                rows={5}
-                placeholder="Type feedback…"
-                value={reviewText}
-                onChange={(e) => setReviewText(e.target.value)}
-              />
-            </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
-              <button className="btn-1975 btn-1975--filled" onClick={save} disabled={!canSave || loading}>
-                {loading ? "Saving…" : "Save Review"}
-              </button>
-              <Link href="/admin/summary" className="btn-1975">Cancel</Link>
-            </div>
+            {hasExisting ? (
+              <div
+                style={{
+                  border: "1px solid var(--border)",
+                  borderRadius: 6,
+                  padding: "12px 14px",
+                  color: "var(--fg)",
+                }}
+              >
+                <strong>Only one review per customer</strong>
+                <div className="muted-1975" style={{ marginTop: 6 }}>
+                  {customerName} already submitted a review for this movie.
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <Link href="/admin/summary" className="btn-1975">
+                    Back to Summary
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Rating (1–5)</div>
+                  <select
+                    className="select-1975"
+                    value={rating}
+                    onChange={(e) => setRating(Number(e.target.value))}
+                  >
+                    {[5, 4, 3, 2, 1].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Review (optional)</div>
+                  <textarea
+                    className="input-1975"
+                    rows={5}
+                    placeholder="Type feedback…"
+                    value={reviewText}
+                    onChange={(e) => setReviewText(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                  <button
+                    className="btn-1975 btn-1975--filled"
+                    onClick={save}
+                    disabled={!canSave || loading}
+                  >
+                    {loading ? "Saving…" : "Save Review"}
+                  </button>
+                  <Link href="/admin/summary" className="btn-1975">
+                    Cancel
+                  </Link>
+                </div>
+              </>
+            )}
           </div>
         )}
 
