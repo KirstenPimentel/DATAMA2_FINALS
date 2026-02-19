@@ -25,6 +25,7 @@ export default function BookPage() {
   const [step, setStep] = useState<number>(1);
 
   const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [theaterId, setTheaterId] = useState<number | null>(null);
   const [movieId, setMovieId] = useState<number | null>(null);
   const [showtimeId, setShowtimeId] = useState<number | null>(null);
@@ -36,7 +37,6 @@ export default function BookPage() {
   const [movies, setMovies] = useState<Movie[]>([]);
   const [showtimes, setShowtimes] = useState<Showtime[]>([]);
   const [seats, setSeats] = useState<Seat[]>([]);
-
   const [price, setPrice] = useState<number>(0);
   const [discountPct, setDiscountPct] = useState<number>(0);
 
@@ -44,6 +44,10 @@ export default function BookPage() {
   const [ticketId, setTicketId] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  const isValidEmail = (e: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+
+  // Initial loads
   useEffect(() => {
     (async () => {
       setErrorMsg(null);
@@ -66,6 +70,7 @@ export default function BookPage() {
     })();
   }, []);
 
+  // Load showtimes when theater or movie changes
   useEffect(() => {
     (async () => {
       setErrorMsg(null);
@@ -79,10 +84,7 @@ export default function BookPage() {
         .order('show_date', { ascending: true })
         .order('show_time', { ascending: true });
 
-      if (error) {
-        setErrorMsg(error.message);
-        return;
-      }
+      if (error) { setErrorMsg(error.message); return; }
       setShowtimes((data as Showtime[]) ?? []);
       setShowtimeId(null);
       setSeatId(null);
@@ -90,6 +92,7 @@ export default function BookPage() {
     })();
   }, [theaterId, movieId]);
 
+  // Load available seats when showtime changes
   useEffect(() => {
     (async () => {
       setErrorMsg(null);
@@ -100,10 +103,7 @@ export default function BookPage() {
         .select('seat_id')
         .eq('showtime_id', showtimeId);
 
-      if (soldErr) {
-        setErrorMsg(soldErr.message);
-        return;
-      }
+      if (soldErr) { setErrorMsg(soldErr.message); return; }
       const soldIds = new Set<number>((sold ?? []).map((s: any) => s.seat_id));
 
       const { data: allSeats, error: seatsErr } = await supabase
@@ -112,17 +112,14 @@ export default function BookPage() {
         .eq('theater_id', theaterId)
         .order('seat_no', { ascending: true });
 
-      if (seatsErr) {
-        setErrorMsg(seatsErr.message);
-        return;
-      }
-
+      if (seatsErr) { setErrorMsg(seatsErr.message); return; }
       const available: Seat[] = (allSeats ?? []).filter(s => !soldIds.has(s.seat_id));
       setSeats(available);
       setSeatId(null);
     })();
   }, [showtimeId, theaterId]);
 
+  // Load base price + discount
   useEffect(() => {
     (async () => {
       setErrorMsg(null);
@@ -134,13 +131,9 @@ export default function BookPage() {
         .eq('showtime_id', showtimeId)
         .limit(1);
 
-      if (stErr) {
-        setErrorMsg(stErr.message);
-        return;
-      }
+      if (stErr) { setErrorMsg(stErr.message); return; }
       const base = st?.[0]?.ticket_price ?? 0;
 
-      // showtime-specific discount
       const { data: sdRows, error: sdErr } = await supabase
         .from('discounts')
         .select('discount_percentage')
@@ -148,26 +141,17 @@ export default function BookPage() {
         .eq('discount_type', discountType)
         .limit(1);
 
-      if (sdErr) {
-        setErrorMsg(sdErr.message);
-        return;
-      }
-
+      if (sdErr) { setErrorMsg(sdErr.message); return; }
       let pct: number | null = sdRows?.[0]?.discount_percentage ?? null;
 
       if (pct === null) {
-        // global discount
         const { data: gdRows, error: gdErr } = await supabase
           .from('discounts')
           .select('discount_percentage')
           .is('showtime_id', null)
           .eq('discount_type', discountType)
           .limit(1);
-
-        if (gdErr) {
-          setErrorMsg(gdErr.message);
-          return;
-        }
+        if (gdErr) { setErrorMsg(gdErr.message); return; }
         pct = gdRows?.[0]?.discount_percentage ?? 0;
       }
 
@@ -176,17 +160,19 @@ export default function BookPage() {
     })();
   }, [showtimeId, discountType]);
 
-  const discountAmount = useMemo(() => {
-    return Math.round((price * discountPct / 100) * 100) / 100;
-  }, [price, discountPct]);
-
-  const finalPrice = useMemo(() => {
-    return Math.round((price - discountAmount) * 100) / 100;
-  }, [price, discountAmount]);
+  const discountAmount = useMemo(
+    () => Math.round((price * discountPct / 100) * 100) / 100,
+    [price, discountPct]
+  );
+  const finalPrice = useMemo(
+    () => Math.round((price - discountAmount) * 100) / 100,
+    [price, discountAmount]
+  );
 
   const canNext = useMemo(() => {
     switch (step) {
-      case 1: return customerName.trim().length > 0;
+      case 1:
+        return customerName.trim().length > 0 && isValidEmail(customerEmail);
       case 2: return !!theaterId;
       case 3: return !!movieId;
       case 4: return !!showtimeId;
@@ -195,14 +181,14 @@ export default function BookPage() {
       case 7: return !!paymentMethod;
       default: return true;
     }
-  }, [step, customerName, theaterId, movieId, showtimeId, seatId, discountType, paymentMethod]);
+  }, [step, customerName, customerEmail, theaterId, movieId, showtimeId, seatId, discountType, paymentMethod]);
 
   const next = () => setStep(s => Math.min(8, s + 1));
   const prev = () => setStep(s => Math.max(1, s - 1));
 
   async function saveTicket() {
     setErrorMsg(null);
-    if (!customerName || !showtimeId || !seatId) return;
+    if (!customerName || !isValidEmail(customerEmail) || !showtimeId || !seatId) return;
     setSaving(true);
 
     const { data: ticket, error: tErr } = await supabase
@@ -210,6 +196,7 @@ export default function BookPage() {
       .insert({
         user_id: null,
         customer_name: customerName,
+        customer_email: customerEmail.trim(),
         showtime_id: showtimeId,
         seat_id: seatId,
         ticket_status: 'RESERVED',
@@ -237,9 +224,7 @@ export default function BookPage() {
     });
 
     setSaving(false);
-    if (pErr) {
-      setErrorMsg(`Ticket saved (ID: ${ticket.ticket_id}) but payment insert failed: ${pErr.message}`);
-    }
+    if (pErr) setErrorMsg(`Ticket saved (ID: ${ticket.ticket_id}) but payment insert failed: ${pErr.message}`);
   }
 
   const chosenShowtime = showtimes.find(s => s.showtime_id === showtimeId);
@@ -251,69 +236,65 @@ export default function BookPage() {
         <div className="space-y-6">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h1>ADD CUSTOMER</h1>
-            <Link href="/" className="btn-1975">← Back to Start</Link>
+            <Link href="/">← Back to Start</Link>
           </div>
 
           {errorMsg && (
-            <div style={{ border: '1px solid #b91c1c', padding: '0.75rem', color: '#b91c1c' }}>
-              {errorMsg}
-            </div>
+            <div style={{ border: '1px solid #b91c1c', padding: '0.75rem', color: '#b91c1c' }}>{errorMsg}</div>
           )}
 
           {step === 1 && (
-            <div>
-              <label className="muted-1975">Customer Name</label>
-              <input
-                className="input-1975"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="e.g. Juan Dela Cruz"
-              />
+            <div className="space-y-6">
+              <div>
+                <label className="muted-1975">Customer Name</label>
+                <input
+                  className="input-1975"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="e.g. Juan Dela Cruz"
+                />
+              </div>
+              <div>
+                <label className="muted-1975">Customer Email</label>
+                <input
+                  className="input-1975"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  placeholder="e.g. juan@example.com"
+                  type="email"
+                />
+                {!isValidEmail(customerEmail) && customerEmail.length > 0 && (
+                  <div className="muted-1975" style={{ marginTop: 6 }}>Enter a valid email.</div>
+                )}
+              </div>
             </div>
           )}
+
+          {/* Steps 2..7 unchanged from your previous version */}
+          {/* Theater, Movie, Showtime, Seat, Discount, Payment */}
 
           {step === 2 && (
             <div>
               <label className="muted-1975">Theater</label>
-              <select
-                className="select-1975"
-                value={theaterId ?? ''}
-                onChange={(e) => setTheaterId(e.target.value ? Number(e.target.value) : null)}
-              >
+              <select className="select-1975" value={theaterId ?? ''} onChange={(e)=>setTheaterId(e.target.value ? Number(e.target.value): null)}>
                 <option value="">Select theater</option>
-                {theaters.map(t => (
-                  <option key={t.theater_id} value={t.theater_id}>
-                    {t.theater_name} — {t.location}
-                  </option>
-                ))}
+                {theaters.map(t => <option key={t.theater_id} value={t.theater_id}>{t.theater_name} — {t.location}</option>)}
               </select>
             </div>
           )}
-
           {step === 3 && (
             <div>
               <label className="muted-1975">Movie</label>
-              <select
-                className="select-1975"
-                value={movieId ?? ''}
-                onChange={(e) => setMovieId(e.target.value ? Number(e.target.value) : null)}
-              >
+              <select className="select-1975" value={movieId ?? ''} onChange={(e)=>setMovieId(e.target.value ? Number(e.target.value): null)}>
                 <option value="">Select movie</option>
-                {movies.map(m => (
-                  <option key={m.movie_id} value={m.movie_id}>{m.title}</option>
-                ))}
+                {movies.map(m => <option key={m.movie_id} value={m.movie_id}>{m.title}</option>)}
               </select>
             </div>
           )}
-
           {step === 4 && (
             <div>
               <label className="muted-1975">Showtime</label>
-              <select
-                className="select-1975"
-                value={showtimeId ?? ''}
-                onChange={(e) => setShowtimeId(e.target.value ? Number(e.target.value) : null)}
-              >
+              <select className="select-1975" value={showtimeId ?? ''} onChange={(e)=>setShowtimeId(e.target.value ? Number(e.target.value): null)}>
                 <option value="">Select showtime</option>
                 {showtimes.map(st => (
                   <option key={st.showtime_id} value={st.showtime_id}>
@@ -321,35 +302,26 @@ export default function BookPage() {
                   </option>
                 ))}
               </select>
+              {theaterId && movieId && showtimes.length === 0 && (
+                <div className="muted-1975" style={{ marginTop: 6 }}>
+                  No showtimes found for this selection.
+                </div>
+              )}
             </div>
           )}
-
           {step === 5 && (
             <div>
               <label className="muted-1975">Seat</label>
-              <select
-                className="select-1975"
-                value={seatId ?? ''}
-                onChange={(e) => setSeatId(e.target.value ? Number(e.target.value) : null)}
-              >
+              <select className="select-1975" value={seatId ?? ''} onChange={(e)=>setSeatId(e.target.value ? Number(e.target.value): null)}>
                 <option value="">Select seat</option>
-                {seats.map(s => (
-                  <option key={s.seat_id} value={s.seat_id}>
-                    {s.seat_no} — {s.seat_type}
-                  </option>
-                ))}
+                {seats.map(s => <option key={s.seat_id} value={s.seat_id}>{s.seat_no} — {s.seat_type}</option>)}
               </select>
             </div>
           )}
-
           {step === 6 && (
             <div>
               <label className="muted-1975">Discount</label>
-              <select
-                className="select-1975"
-                value={discountType}
-                onChange={(e) => setDiscountType(e.target.value as DiscountType)}
-              >
+              <select className="select-1975" value={discountType} onChange={(e)=>setDiscountType(e.target.value as DiscountType)}>
                 <option value="REGULAR">Regular (0%)</option>
                 <option value="PWD">PWD (20%)</option>
                 <option value="SENIOR_CITIZEN">Senior Citizen (20%)</option>
@@ -357,15 +329,10 @@ export default function BookPage() {
               </select>
             </div>
           )}
-
           {step === 7 && (
             <div>
               <label className="muted-1975">Payment Method</label>
-              <select
-                className="select-1975"
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
-              >
+              <select className="select-1975" value={paymentMethod} onChange={(e)=>setPaymentMethod(e.target.value as PaymentMethod)}>
                 <option value="GCASH">GCash</option>
                 <option value="CARD">Card</option>
                 <option value="CASH">Cash</option>
@@ -378,23 +345,20 @@ export default function BookPage() {
               <h2>Ticket Preview</h2>
               <div className="card-1975" style={{ padding: '1rem', marginTop: '0.5rem' }}>
                 <div><b>Name:</b> {customerName}</div>
+                <div><b>Email:</b> {customerEmail}</div>
                 <div><b>Cinema:</b> {chosenShowtime?.theater_name} — {chosenShowtime?.location}</div>
                 <div><b>Movie:</b> {chosenShowtime?.title}</div>
                 <div><b>Showtime:</b> {chosenShowtime?.show_date} {chosenShowtime?.show_time}</div>
                 <div><b>Seat:</b> {chosenSeat?.seat_no}</div>
-                <div style={{ marginTop: '0.5rem' }}><b>Original:</b> ₱{price.toFixed(2)}</div>
-                <div><b>Discount:</b> {discountType} ({discountPct}%) → ₱{discountAmount.toFixed(2)}</div>
+                <div style={{ marginTop: 6 }}><b>Original:</b> ₱{price.toFixed(2)}</div>
+                <div><b>Discount:</b> {discountType} ({discountPct}%) → ₱{(Math.round((price * discountPct / 100) * 100) / 100).toFixed(2)}</div>
                 <div><b>Total:</b> ₱{finalPrice.toFixed(2)}</div>
                 <div><b>Pay via:</b> {paymentMethod}</div>
               </div>
 
               {!ticketId ? (
                 <div style={{ marginTop: '1rem' }}>
-                  <button
-                    className="btn-1975"
-                    onClick={saveTicket}
-                    disabled={saving}
-                  >
+                  <button className="btn-1975" onClick={saveTicket} disabled={saving}>
                     {saving ? 'Saving…' : 'Confirm & Save Ticket'}
                   </button>
                 </div>
@@ -404,8 +368,7 @@ export default function BookPage() {
                     Ticket saved (ID: {ticketId})
                   </div>
                   <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    <Link href="/book" className="btn-1975">Add Customer</Link>
-                    <Link href="/admin/summary" className="btn-1975">Show Summary</Link>
+                    <Link href="/book"><span className="btn-1975">Add Customer</span></dmin/summary<span className="btn-1975">Show Summary</span></Link>
                   </div>
                 </div>
               )}
