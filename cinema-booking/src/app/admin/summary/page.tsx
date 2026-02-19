@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
-/** Types from DB */
+/** Types */
 type Showtime = {
   show_date: string;
   show_time: string;
@@ -15,13 +15,13 @@ type Showtime = {
 };
 
 type RowRaw = {
-  ticket_id: number; // If your PK is `id`, change to `id` and update selects accordingly
+  ticket_id: number;
   customer_name: string;
   ticket_status: string | null;
   booking_date: string | null;
   ticket_price: number | null;
   final_price: number | null;
-  discount_type?: string | null; // REGULAR | PWD | SENIOR | STUDENT
+  discount_type?: string | null;
   seats?: { seat_no: string | null } | null;
   showtimes?: Showtime | null;
 };
@@ -39,10 +39,9 @@ type ReviewRow = {
   rating: number;
   review_text: string | null;
   review_date: string | null;
-  email: string | null; // we store customer_name here for uniqueness
+  email: string | null;
 };
 
-/** Helpers */
 const peso = (n: number) =>
   `₱${(n ?? 0).toLocaleString("en-PH", {
     minimumFractionDigits: 2,
@@ -60,11 +59,49 @@ export default function AdminSummaryPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Scroll sync + header alignment
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const railScrollRef = useRef<HTMLDivElement | null>(null);
+  const theadRef = useRef<HTMLTableSectionElement | null>(null);
+  const [actionHeaderH, setActionHeaderH] = useState<number>(42);
+
+  // sync scrolling
+  useEffect(() => {
+    const left = tableScrollRef.current;
+    const right = railScrollRef.current;
+    if (!left || !right) return;
+
+    const onLeft = () => {
+      right.scrollTop = left.scrollTop;
+    };
+    const onRight = () => {
+      left.scrollTop = right.scrollTop;
+    };
+    left.addEventListener("scroll", onLeft);
+    right.addEventListener("scroll", onRight);
+    return () => {
+      left.removeEventListener("scroll", onLeft);
+      right.removeEventListener("scroll", onRight);
+    };
+  }, [tableScrollRef.current, railScrollRef.current]);
+
+  // measure header height
+  useEffect(() => {
+    const updateHeaderHeight = () => {
+      if (theadRef.current) {
+        const h = theadRef.current.getBoundingClientRect().height;
+        if (h && Math.abs(h - actionHeaderH) > 0.5) setActionHeaderH(h);
+      }
+    };
+    updateHeaderHeight();
+    window.addEventListener("resize", updateHeaderHeight);
+    return () => window.removeEventListener("resize", updateHeaderHeight);
+  }, [theadRef.current, actionHeaderH]);
+
   const load = async () => {
     setLoading(true);
     setErr(null);
     try {
-      // 1) Tickets + joins (include discount_type and showtimes.movie_id)
       const { data: ticketsData, error: tErr } = await supabase
         .from("tickets")
         .select(`
@@ -94,7 +131,6 @@ export default function AdminSummaryPage() {
       const tickets = (ticketsData ?? []) as unknown as RowRaw[];
       setRows(tickets);
 
-      // 2) Payments for these tickets
       const ticketIds = tickets.map((t) => t.ticket_id);
       if (ticketIds.length > 0) {
         const { data: paysData, error: pErr } = await supabase
@@ -113,7 +149,6 @@ export default function AdminSummaryPage() {
         setPayments({});
       }
 
-      // 3) Reviews for present movie_ids → latest per (movie_id, lower(email))
       const movieIds = Array.from(
         new Set(
           tickets
@@ -149,7 +184,6 @@ export default function AdminSummaryPage() {
     load();
   }, []);
 
-  /** Flatten for rendering */
   const table = useMemo(() => {
     return rows.map((r) => {
       const theaterName = r.showtimes?.theaters?.theater_name ?? "—";
@@ -169,11 +203,15 @@ export default function AdminSummaryPage() {
       const reviewKey = movieId != null ? `${movieId}||${norm(r.customer_name)}` : "";
       const review = reviewKey ? reviewsByMovieAndName[reviewKey] : undefined;
 
+      const hasRating = typeof review?.rating === "number";
+      const hasReviewText = !!(review?.review_text && review.review_text.trim().length > 0);
+      const hasFullReview = hasRating && hasReviewText;
+
       return {
         ticket_id: r.ticket_id,
         customer_name: r.customer_name,
-        location,
         theater: theaterName,
+        location,
         movie: movieTitle,
         movie_id: movieId,
         showtime: showtimeStr,
@@ -183,9 +221,9 @@ export default function AdminSummaryPage() {
         discountAmt,
         total,
         payment_method: payment?.payment_method ?? "—",
-        rating: review?.rating ?? null,
-        review_text: review?.review_text ?? "",
-        has_review: !!review,
+        rating: hasRating ? review!.rating : null,
+        review_text: hasReviewText ? review!.review_text! : "",
+        has_full_review: hasFullReview, // only disable when both exist
       };
     });
   }, [rows, payments, reviewsByMovieAndName]);
@@ -233,96 +271,161 @@ export default function AdminSummaryPage() {
           </h1>
 
           <div style={{ display: "flex", gap: 8 }}>
-            <Link href="/" className="btn-1975">← Back to Start</Link>
-            <Link href="/admin/book" className="btn-1975 btn-1975--filled">+ Add Customer</Link>
-            <button onClick={load} className="btn-1975">Refresh</button>
+            <Link href="/" className="btn-1975">
+              ← Back to Start
+            </Link>
+            <Link href="/admin/book" className="btn-1975 btn-1975--filled">
+              + Add Customer
+            </Link>
+            <button onClick={load} className="btn-1975">
+              Refresh
+            </button>
           </div>
         </div>
 
-        {/* Errors / Loading */}
-        {err && <div style={{ color: "crimson", marginBottom: 6 }}>{err}</div>}
-        {loading && <div style={{ color: "var(--muted)", marginBottom: 6 }}>Loading…</div>}
-
-        {/* Table */}
-        <div style={{ border: "1px solid var(--border)", borderRadius: 6, overflow: "hidden" }}>
-          <div className="table-scroll">
-            <table className="table-1975">
-              <thead>
-                <tr>
-                  <th>Ticket ID</th>
-                  <th>Customer</th>
-                  <th>Cinema</th>
-                  <th>Location</th>
-                  <th>Movie</th>
-                  <th>Showtime</th>
-                  <th>Seat</th>
-                  <th style={{ textAlign: "right" }}>Original</th>
-                  <th>Discount Type</th>
-                  <th style={{ textAlign: "right" }}>Discount</th>
-                  <th style={{ textAlign: "right" }}>Total</th>
-                  <th>Payment</th>
-                  <th>Review</th>
-                  <th>Review Text</th>
-                </tr>
-              </thead>
-              <tbody>
-                {table.length === 0 ? (
+        {/* Content: table + right rail */}
+        <div style={{ display: "flex", gap: 10 }}>
+          {/* LEFT: Table */}
+          <div
+            style={{
+              flex: 1,
+              minWidth: 0,
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              overflow: "hidden",
+            }}
+          >
+            <div ref={tableScrollRef} className="table-scroll">
+              <table className="table-1975">
+                <thead ref={theadRef}>
                   <tr>
-                    <td colSpan={14} style={{ padding: 10, textAlign: "center", color: "var(--muted)" }}>
-                      No tickets yet.
-                    </td>
+                    <th>Ticket ID</th>
+                    <th>Customer</th>
+                    <th>Cinema</th>
+                    <th>Location</th>
+                    <th>Movie</th>
+                    <th>Showtime</th>
+                    <th>Seat</th>
+                    <th style={{ textAlign: "right" }}>Original</th>
+                    <th>Discount Type</th>
+                    <th style={{ textAlign: "right" }}>Discount</th>
+                    <th style={{ textAlign: "right" }}>Total</th>
+                    <th>Payment</th>
+                    <th>Review</th>
+                    <th>Review Text</th>
                   </tr>
-                ) : (
-                  table.map((r, idx) => (
-                    <tr key={r.ticket_id} className={idx % 2 === 1 ? "table-row-alt" : ""}>
-                      <td>
-                        <Link href={`/admin/ticket/${r.ticket_id}`} style={{ textDecoration: "underline" }}>
-                          {r.ticket_id}
-                        </Link>
-                      </td>
-                      <td>{r.customer_name}</td>
-                      <td>{r.theater}</td>
-                      <td>{r.location}</td>
-                      <td>{r.movie}</td>
-                      <td>{r.showtime}</td>
-                      <td>{r.seat}</td>
-                      <td style={{ textAlign: "right" }}>{peso(Number(r.original))}</td>
-                      <td>{r.discount_type}</td>
-                      <td style={{ textAlign: "right" }}>{peso(Number(r.discountAmt))}</td>
-                      <td style={{ textAlign: "right" }}>{peso(Number(r.total))}</td>
-                      <td>{r.payment_method}</td>
-                      <td>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span>{r.rating ? `★ ${r.rating}` : "—"}</span>
-                          {r.has_review ? (
-                            <button
-                              className="btn-1975"
-                              title="Only one review per customer"
-                              disabled
-                              style={{ opacity: 0.6 }}
-                            >
-                              Reviewed
-                            </button>
-                          ) : (
-                            <Link
-                              href={`/admin/reviews/new?ticketId=${r.ticket_id}`}
-                              className="btn-1975"
-                            >
-                              Add Review
-                            </Link>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        <span style={{ color: r.review_text ? "var(--fg)" : "var(--muted)" }}>
-                          {r.review_text || ""}
-                        </span>
+                </thead>
+                <tbody>
+                  {table.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={14}
+                        style={{ padding: 10, textAlign: "center", color: "var(--muted)" }}
+                      >
+                        No tickets yet.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    table.map((r, idx) => (
+                      <tr key={r.ticket_id} className={idx % 2 === 1 ? "table-row-alt" : ""}>
+                        <td>
+                          <Link
+                            href={`/admin/ticket/${r.ticket_id}`}
+                            style={{ textDecoration: "underline" }}
+                          >
+                            {r.ticket_id}
+                          </Link>
+                        </td>
+                        <td>{r.customer_name}</td>
+                        <td>{r.theater}</td>
+                        <td>{r.location}</td>
+                        <td>{r.movie}</td>
+                        <td>{r.showtime}</td>
+                        <td>{r.seat}</td>
+                        <td style={{ textAlign: "right" }}>{peso(Number(r.original))}</td>
+                        <td>{r.discount_type}</td>
+                        <td style={{ textAlign: "right" }}>{peso(Number(r.discountAmt))}</td>
+                        <td style={{ textAlign: "right" }}>{peso(Number(r.total))}</td>
+                        <td>{r.payment_method}</td>
+                        <td>{r.rating ? `★ ${r.rating}` : "—"}</td>
+                        <td>
+                          <span
+                            style={{ color: r.review_text ? "var(--fg)" : "var(--muted)" }}
+                          >
+                            {r.review_text || ""}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* RIGHT: Vertical review buttons rail */}
+          <div
+            style={{
+              width: 140,
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            <div
+              style={{
+                height: actionHeaderH, // aligned to actual thead height
+                background: "#0f0f0f",
+                borderBottom: "1px solid var(--border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: 700,
+                fontSize: 13,
+              }}
+            >
+              Action
+            </div>
+
+            <div ref={railScrollRef} style={{ overflowY: "auto", maxHeight: "70vh" }}>
+              {table.length === 0 ? (
+                <div style={{ padding: 10, color: "var(--muted)", textAlign: "center" }}>—</div>
+              ) : (
+                table.map((r) => (
+                  <div
+                    key={`rail-${r.ticket_id}`}
+                    style={{
+                      padding: 8,
+                      borderTop: "1px solid #1f1f1f",
+                      display: "flex",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {r.has_full_review ? (
+                      <button
+                        className="btn-1975"
+                        title="Only one finalized review per customer"
+                        disabled
+                        style={{ opacity: 0.6, width: 110 }}
+                      >
+                        Reviewed
+                      </button>
+                    ) : (
+                      <Link
+                        href={`/admin/reviews/new?ticketId=${r.ticket_id}`}
+                        className="btn-1975"
+                        style={{ width: 110, textAlign: "center" }}
+                        title="Add/Complete Review"
+                      >
+                        Add Review
+                      </Link>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
       </section>

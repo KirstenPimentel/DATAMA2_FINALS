@@ -15,7 +15,15 @@ type TicketRow = {
   showtimes?: Showtime | null;
 };
 
-const norm = (s: string | null | undefined) => (s ?? "").trim().toLowerCase();
+type ExistingReview = {
+  review_id: number;
+  movie_id: number;
+  rating: number | null;
+  review_text: string | null;
+  email: string | null;
+};
+
+const hasText = (s: string | null | undefined) => !!(s && s.trim().length > 0);
 
 export default function NewReviewPage() {
   const router = useRouter();
@@ -26,6 +34,8 @@ export default function NewReviewPage() {
   const [err, setErr] = useState<string | null>(null);
 
   const [ticket, setTicket] = useState<TicketRow | null>(null);
+  const [existing, setExisting] = useState<ExistingReview | null>(null);
+
   const [rating, setRating] = useState<number>(5);
   const [reviewText, setReviewText] = useState<string>("");
 
@@ -63,9 +73,7 @@ export default function NewReviewPage() {
   const movieTitle = ticket?.showtimes?.movies?.title ?? "—";
   const customerName = ticket?.customer_name ?? "—";
 
-  // Check if a review already exists for (movie_id, customer_name)
-  const [hasExisting, setHasExisting] = useState<boolean>(false);
-
+  // Check if a review exists for (movie_id, customer_name) — we store customer name in `email`
   useEffect(() => {
     const checkExisting = async () => {
       if (!movieId || !customerName) return;
@@ -74,12 +82,17 @@ export default function NewReviewPage() {
       try {
         const { data, error } = await supabase
           .from("reviews")
-          .select("review_id")
+          .select("review_id, movie_id, rating, review_text, email")
           .eq("movie_id", Number(movieId))
-          // store the customer name in `email` for uniqueness
-          .eq("email", customerName);
+          .eq("email", customerName)
+          .order("review_date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
         if (error) throw error;
-        setHasExisting((data ?? []).length > 0);
+        const ex = (data as unknown as ExistingReview) ?? null;
+        setExisting(ex);
+        if (ex?.rating != null) setRating(ex.rating);
+        if (ex?.review_text) setReviewText(ex.review_text);
       } catch (e: any) {
         setErr(e?.message ?? "Failed to check existing review.");
       } finally {
@@ -89,25 +102,44 @@ export default function NewReviewPage() {
     checkExisting();
   }, [movieId, customerName]);
 
+  const hasFullReview =
+    !!existing && hasText(existing.review_text) && typeof existing.rating === "number";
+
   const canSave = useMemo(() => {
-    return !!movieId && !!customerName && rating >= 1 && rating <= 5 && !hasExisting;
-  }, [movieId, customerName, rating, hasExisting]);
+    if (!movieId || !customerName) return false;
+    if (hasFullReview) return false; // already finalized
+    return rating >= 1 && rating <= 5; // text optional
+  }, [movieId, customerName, rating, hasFullReview]);
 
   const save = async () => {
     if (!canSave) return;
     setLoading(true);
     setErr(null);
     try {
-      const insertObj: any = {
-        movie_id: movieId,
-        rating,
-        review_text: reviewText || null,
-        // use `email` column to store the customer name, so we can enforce one-per-customer
-        email: customerName,
-      };
-
-      const { error } = await supabase.from("reviews").insert(insertObj);
-      if (error) throw error;
+      if (existing && !hasText(existing.review_text)) {
+        // Complete an existing rating-only review → UPDATE
+        const { error } = await supabase
+          .from("reviews")
+          .update({
+            rating,
+            review_text: reviewText || null,
+            review_date: new Date().toISOString(),
+          })
+          .eq("review_id", existing.review_id);
+        if (error) throw error;
+      } else if (!existing) {
+        // Create a new review (rating-only or with text)
+        const { error } = await supabase.from("reviews").insert({
+          movie_id: movieId,
+          rating,
+          review_text: reviewText || null,
+          email: customerName, // store customer name here for uniqueness
+        } as any);
+        if (error) throw error;
+      } else {
+        // Defensive
+        throw new Error("Only one review per customer");
+      }
 
       router.push("/admin/summary");
     } catch (e: any) {
@@ -141,7 +173,9 @@ export default function NewReviewPage() {
           <h1 style={{ fontSize: 20, letterSpacing: "0.16em", fontWeight: 700, margin: 0 }}>
             ADD REVIEW
           </h1>
-          <Link href="/admin/summary" className="btn-1975">← Back</Link>
+          <Link href="/admin/summary" className="btn-1975">
+            ← Back
+          </Link>
         </div>
 
         {loading && <div style={{ color: "var(--muted)", marginBottom: 10 }}>Loading…</div>}
@@ -158,7 +192,7 @@ export default function NewReviewPage() {
               <div className="muted-1975">{movieTitle}</div>
             </div>
 
-            {hasExisting ? (
+            {hasFullReview ? (
               <div
                 style={{
                   border: "1px solid var(--border)",
@@ -169,7 +203,7 @@ export default function NewReviewPage() {
               >
                 <strong>Only one review per customer</strong>
                 <div className="muted-1975" style={{ marginTop: 6 }}>
-                  {customerName} already submitted a review for this movie.
+                  {customerName} already submitted a full review (rating + text) for this movie.
                 </div>
                 <div style={{ marginTop: 12 }}>
                   <Link href="/admin/summary" className="btn-1975">

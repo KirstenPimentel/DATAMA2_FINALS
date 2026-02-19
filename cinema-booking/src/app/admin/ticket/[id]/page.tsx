@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
 
@@ -13,12 +14,13 @@ type Showtime = {
 };
 
 type TicketRow = {
-  ticket_id: number;
-  customer_name: string | null;
+  ticket_id: number; // if your PK is `id`, change here and in .select()
+  customer_name: string;
   ticket_status: string | null;
   booking_date: string | null;
   ticket_price: number | null;
   final_price: number | null;
+  discount_type?: string | null;
   seats?: { seat_no: string | null } | null;
   showtimes?: Showtime | null;
 };
@@ -26,7 +28,7 @@ type TicketRow = {
 type Payment = {
   ticket_id: number;
   amount: number;
-  payment_method: string | null;
+  payment_method: "GCASH" | "CARD" | "CASH" | string;
   payment_status: string | null;
   payment_date: string | null;
 };
@@ -37,21 +39,22 @@ const peso = (n: number) =>
     maximumFractionDigits: 2,
   })}`;
 
-export default function TicketPrintPage({ params }: { params: { id: string } }) {
-  const id = Number(params.id);
-  const [t, setT] = useState<TicketRow | null>(null);
-  const [p, setP] = useState<Payment | null>(null);
+export default function TicketPage() {
+  const { id } = useParams<{ id: string }>();
+
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [ticket, setTicket] = useState<TicketRow | null>(null);
+  const [payment, setPayment] = useState<Payment | null>(null);
 
   useEffect(() => {
-    let alive = true;
-    (async () => {
+    const load = async () => {
+      if (!id) return;
+      setLoading(true);
+      setErr(null);
       try {
-        setLoading(true);
-        setErr(null);
-
-        const { data, error } = await supabase
+        // Ticket + joins
+        const { data: tData, error: tErr } = await supabase
           .from("tickets")
           .select(`
             ticket_id,
@@ -60,6 +63,9 @@ export default function TicketPrintPage({ params }: { params: { id: string } }) 
             booking_date,
             ticket_price,
             final_price,
+            discount_type,
+            seat_id,
+            showtime_id,
             seats:seat_id ( seat_no ),
             showtimes:showtime_id (
               show_date,
@@ -69,44 +75,60 @@ export default function TicketPrintPage({ params }: { params: { id: string } }) 
               theaters:theater_id ( theater_name, location )
             )
           `)
-          .eq("ticket_id", id)
-          .single();
+          .eq("ticket_id", Number(id))
+          .maybeSingle();
+        if (tErr) throw tErr;
 
-        if (error) throw error;
-        const ticket = (data ?? null) as unknown as TicketRow;
-        if (!alive) return;
+        const t = tData as unknown as TicketRow | null;
+        setTicket(t);
 
-        const { data: payData, error: payErr } = await supabase
+        // Latest payment
+        const { data: pData, error: pErr } = await supabase
           .from("payments")
           .select("ticket_id, amount, payment_method, payment_status, payment_date")
-          .eq("ticket_id", id)
+          .eq("ticket_id", Number(id))
+          .order("payment_date", { ascending: false })
+          .limit(1)
           .maybeSingle();
+        if (pErr) throw pErr;
 
-        if (payErr) throw payErr;
-
-        setT(ticket);
-        setP((payData as Payment) ?? null);
+        setPayment(pData as unknown as Payment | null);
       } catch (e: any) {
-        if (!alive) return;
         setErr(e?.message ?? "Failed to load ticket.");
       } finally {
-        if (alive) setLoading(false);
+        setLoading(false);
       }
-    })();
-    return () => {
-      alive = false;
     };
+    load();
   }, [id]);
 
-  const theater = t?.showtimes?.theaters?.theater_name ?? "—";
-  const location = t?.showtimes?.theaters?.location ?? "—";
-  const movie = t?.showtimes?.movies?.title ?? "—";
-  const showDate = t?.showtimes?.show_date ?? "—";
-  const showTime = (t?.showtimes?.show_time ?? "").slice(0, 5) || "—";
-  const seat = t?.seats?.seat_no ?? "—";
-  const original = t?.ticket_price ?? t?.showtimes?.ticket_price ?? 0;
-  const total = t?.final_price ?? p?.amount ?? original;
-  const discountAmt = Math.max(0, Number(original) - Number(total));
+  const computed = useMemo(() => {
+    if (!ticket) return null;
+    const showDate = ticket.showtimes?.show_date ?? "—";
+    const showTime = (ticket.showtimes?.show_time ?? "").slice(0, 5);
+    const showtimeStr = showTime ? `${showDate} ${showTime}:00` : showDate;
+
+    const original = ticket.ticket_price ?? ticket.showtimes?.ticket_price ?? 0;
+    const total = ticket.final_price ?? payment?.amount ?? original;
+    const discountAmt = Math.max(0, Number(original) - Number(total));
+    const discountType = (ticket.discount_type ?? "REGULAR").toUpperCase();
+
+    return {
+      customer: ticket.customer_name,
+      movie: ticket.showtimes?.movies?.title ?? "—",
+      theater: ticket.showtimes?.theaters?.theater_name ?? "—",
+      location: ticket.showtimes?.theaters?.location ?? "—",
+      seat: ticket.seats?.seat_no ?? "—",
+      showtime: showtimeStr,
+      booking: ticket.booking_date ? new Date(ticket.booking_date).toLocaleString() : "—",
+      original,
+      discountAmt,
+      total,
+      discountType,
+      paymentMethod: payment?.payment_method ?? "—",
+      status: ticket.ticket_status ?? "—",
+    };
+  }, [ticket, payment]);
 
   return (
     <main
@@ -114,98 +136,90 @@ export default function TicketPrintPage({ params }: { params: { id: string } }) 
         minHeight: "100dvh",
         display: "grid",
         placeItems: "center",
-        background: "#f6f6f6",
-        padding: 16,
+        background: "var(--bg)",
+        color: "var(--fg)",
       }}
     >
-      {/* Print styles */}
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          .ticket {
-            box-shadow: none !important;
-            border: 1px solid #000 !important;
-          }
-          body, html {
-            background: #fff !important;
-          }
-        }
-      `}</style>
-
       <section
-        className="ticket"
+        className="card-1975"
         style={{
-          width: "min(640px, 94vw)",
-          background: "#fff",
-          border: "1px solid #d4d4d4",
+          width: "min(700px, 94vw)",
+          background: "var(--card-bg)",
+          border: "1px solid var(--border)",
           borderRadius: 6,
           padding: "22px 24px",
-          boxShadow: "0 2px 0 rgba(0,0,0,0.06)",
         }}
       >
-        {/* Controls */}
-        <div className="no-print" style={{ display: "flex", justifyContent: "space-between" }}>
-          <Link href="/admin/summary" style={{ textDecoration: "none" }}>
-            <button
-              style={{
-                padding: "6px 10px",
-                borderRadius: 4,
-                border: "1px solid #111",
-                background: "#fff",
-                color: "#111",
-                cursor: "pointer",
-              }}
-            >
-              ← Back to Summary
-            </button>
-          </Link>
-          <button
-            onClick={() => window.print()}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 4,
-              border: "1px solid #111",
-              background: "#111",
-              color: "#fff",
-              cursor: "pointer",
-            }}
-          >
-            Print
-          </button>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+          <h1 style={{ fontSize: 18, letterSpacing: "0.16em", fontWeight: 700, margin: 0 }}>
+            DIGITAL TICKET
+          </h1>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Link href="/admin/summary" className="btn-1975">← Summary</Link>
+            <button className="btn-1975" onClick={() => window.print()}>Print</button>
+          </div>
         </div>
 
-        <h1
-          style={{
-            textAlign: "center",
-            fontSize: 24,
-            letterSpacing: "0.16em",
-            fontWeight: 700,
-            color: "#111",
-            marginTop: 8,
-            marginBottom: 16,
-          }}
-        >
-          CINEMA TICKET
-        </h1>
+        {loading && <div style={{ color: "var(--muted)", marginBottom: 8 }}>Loading…</div>}
+        {err && <div style={{ color: "crimson", marginBottom: 8 }}>{err}</div>}
 
-        {loading && <div style={{ color: "#666" }}>Loading…</div>}
-        {err && <div style={{ color: "crimson" }}>{err}</div>}
+        {ticket && computed && (
+          <div
+            style={{
+              border: "1px solid var(--border)",
+              borderRadius: 6,
+              padding: "16px 18px",
+            }}
+          >
+            <div style={{ display: "grid", gap: 6 }}>
+              <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "0.08em" }}>
+                {computed.movie}
+              </div>
+              <div className="muted-1975">TICKET #{ticket.ticket_id} • {computed.status}</div>
 
-        {t && (
-          <div style={{ border: "1px dashed #aaa", borderRadius: 6, padding: 16 }}>
-            <p><strong>Ticket ID:</strong> {t.ticket_id}</p>
-            <p><strong>Name:</strong> {t.customer_name ?? "—"}</p>
-            <p><strong>Cinema:</strong> {theater} — {location}</p>
-            <p><strong>Movie:</strong> {movie}</p>
-            <p><strong>Showtime:</strong> {showDate} {showTime}:00</p>
-            <p><strong>Seat:</strong> {seat}</p>
-            <p><strong>Original:</strong> {peso(Number(original))}</p>
-            <p><strong>Discount:</strong> {peso(Number(discountAmt))}</p>
-            <p><strong>Total:</strong> {peso(Number(total))}</p>
-            <p><strong>Payment:</strong> {p?.payment_method ?? "—"} ({p?.payment_status ?? "—"})</p>
-            <p><strong>Booking Date:</strong> {t.booking_date ? new Date(t.booking_date).toLocaleString() : "—"}</p>
-            <p><strong>Status:</strong> {t.ticket_status ?? "—"}</p>
+              <div style={{ marginTop: 10 }}>
+                <strong>Name:</strong> {computed.customer}
+              </div>
+              <div>
+                <strong>Cinema:</strong> {computed.theater} — {computed.location}
+              </div>
+              <div>
+                <strong>Showtime:</strong> {computed.showtime}
+              </div>
+              <div>
+                <strong>Seat:</strong> {computed.seat}
+              </div>
+
+              <div style={{ height: 1, background: "var(--border)", margin: "12px 0" }} />
+
+              <div style={{ display: "grid", gap: 4 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span><strong>Original</strong></span>
+                  <span>{peso(Number(computed.original))}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>
+                    <strong>Discount</strong> ({computed.discountType})
+                  </span>
+                  <span>- {peso(Number(computed.discountAmt))}</span>
+                </div>
+                <div style={{ height: 1, background: "var(--border)" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700 }}>
+                  <span>Total</span>
+                  <span>{peso(Number(computed.total))}</span>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 4, marginTop: 12 }}>
+                <div><strong>Payment Method:</strong> {computed.paymentMethod}</div>
+                <div><strong>Booked At:</strong> {computed.booking}</div>
+              </div>
+            </div>
           </div>
+        )}
+
+        {!ticket && !loading && !err && (
+          <div className="muted-1975">No ticket found.</div>
         )}
       </section>
     </main>
