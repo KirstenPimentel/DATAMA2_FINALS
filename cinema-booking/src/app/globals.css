@@ -2,15 +2,55 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Minimal black & white UI */
+/* ==========================
+   THE 1975 — Minimal B/W Theme
+   ========================== */
 :root {
-  --bg: #ffffff;
-  --fg: #000000;
+  --bg: #ffffff;    /* paper white */
+  --fg: #000000;    /* inky black */
+  --muted: #6b7280; /* neutral for subtle text (Tailwind gray-500) */
+  --border: #000000;
 }
 
 html, body {
   background: var(--bg);
   color: var(--fg);
-  font-feature-settings: "ss01" on, "ss02" on;
   letter-spacing: 0.02em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Headings: uppercase, wide tracking */
+h1, h2, h3 {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+/* 1975 buttons: black border, invert on hover */
+.btn-1975 {
+  @apply border border-black px-4 py-2 transition-colors;
+}
+.btn-1975:hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+/* Inputs: sharp borders, no rounded corners, black focus ring */
+.input-1975, .select-1975 {
+  @apply w-full border border-black p-2 outline-none;
+}
+.input-1975:focus, .select-1975:focus {
+  box-shadow: 0 0 0 2px var(--fg) inset;
+}
+
+/* Card/container: single black stroke, white background */
+.card-1975 {
+  @apply border border-black bg-white;
+}
+
+/* Muted helper text */
+.muted-1975 {
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: none;
 }
