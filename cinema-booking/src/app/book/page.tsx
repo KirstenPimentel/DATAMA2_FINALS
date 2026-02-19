@@ -1,13 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-
+import { useEffect, useMemo, useState } from "react";
+import { createClient } from "@/lib/supabaseClient"; // your existing client
 
 type DiscountCode = "REGULAR" | "PWD" | "SENIOR" | "STUDENT";
 type PaymentMethod = "GCASH" | "CARD" | "CASH";
 
 type Option = { id: string | number; label: string };
+
+type Theater = { theater_id: number; theater_name: string; location: string };
+type Movie = { movie_id: number; title: string };
+type Showtime = {
+  showtime_id: number;
+  movie_id: number;
+  theater_id: number;
+  show_date: string; // ISO date
+  show_time: string; // HH:mm:ss
+  ticket_price: number;
+};
+type Seat = { seat_id: number; seat_no: string; seat_type: "VIP" | "Regular" };
+type Ticket = {
+  ticket_id: number;
+  showtime_id: number;
+  seat_id: number;
+  ticket_status: "CONFIRMED" | "CANCELLED" | "REFUNDED" | string;
+};
 
 const discountList: { code: DiscountCode; label: string; percent: number }[] = [
   { code: "REGULAR", label: "Regular", percent: 0 },
@@ -16,14 +34,16 @@ const discountList: { code: DiscountCode; label: string; percent: number }[] = [
   { code: "STUDENT", label: "Student", percent: 10 },
 ];
 
-// TEMP OPTIONS (will be fetched later)
-const theaterOptions: Option[] = [];
-const movieOptions: Option[] = [];
-const showtimeOptions: { id: number | string; label: string; price: number }[] =
-  [];
-const seatOptions: Option[] = [];
+/** Helpers */
+const peso = (n: number) =>
+  `₱${(n ?? 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
-/** Lightweight layout primitives for minimalist b/w look */
+const showtimeLabel = (st: Showtime) => {
+  // Format like: 2025-10-28 10:00 — ₱300.00
+  const time = (st.show_time || "").slice(0, 5); // HH:mm
+  return `${st.show_date} ${time}:00 — ${peso(Number(st.ticket_price))}`;
+};
+
 const Box: React.FC<React.PropsWithChildren<{ style?: React.CSSProperties }>> = ({
   children,
   style,
@@ -71,6 +91,8 @@ const Btn: React.FC<
 );
 
 export default function BookPage() {
+  const supabase = createClient();
+
   const [step, setStep] = useState(0);
 
   // Form state
@@ -83,15 +105,176 @@ export default function BookPage() {
   const [discount, setDiscount] = useState<DiscountCode>("REGULAR");
   const [payment, setPayment] = useState<PaymentMethod>("CASH");
 
-  // Derived values for preview
-  const selectedShowtime = useMemo(
-    () => showtimeOptions.find((s) => String(s.id) === String(showtimeId)),
-    [showtimeId]
+  // Data sources
+  const [theaters, setTheaters] = useState<Theater[]>([]);
+  const [movies, setMovies] = useState<Movie[]>([]);
+  const [showtimes, setShowtimes] = useState<Showtime[]>([]);
+  const [seats, setSeats] = useState<Seat[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  /** Load theaters + movies once */
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setErr(null);
+        const [{ data: th, error: e1 }, { data: mv, error: e2 }] = await Promise.all([
+          supabase.from("theaters").select("theater_id, theater_name, location").order("theater_name", { ascending: true }),
+          supabase.from("movies").select("movie_id, title").order("title", { ascending: true }),
+        ]);
+        if (e1) throw e1;
+        if (e2) throw e2;
+        if (!alive) return;
+        setTheaters((th ?? []) as Theater[]);
+        setMovies((mv ?? []) as Movie[]);
+      } catch (e: any) {
+        if (!alive) return;
+        setErr(e?.message ?? "Failed to load data.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Load showtimes when theater or movie changes */
+  useEffect(() => {
+    if (!theaterId || !movieId) {
+      setShowtimes([]);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setErr(null);
+        const { data, error } = await supabase
+          .from("showtimes")
+          .select("showtime_id, movie_id, theater_id, show_date, show_time, ticket_price")
+          .eq("theater_id", Number(theaterId))
+          .eq("movie_id", Number(movieId))
+          .order("show_date", { ascending: true })
+          .order("show_time", { ascending: true });
+        if (error) throw error;
+        if (!alive) return;
+        setShowtimes((data ?? []) as Showtime[]);
+      } catch (e: any) {
+        if (!alive) return;
+        setErr(e?.message ?? "Failed to load showtimes.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [supabase, theaterId, movieId]);
+
+  /** Load available seats when a showtime is chosen */
+  useEffect(() => {
+    if (!showtimeId) {
+      setSeats([]);
+      return;
+    }
+    let alive = true;
+    (async () => {
+      try {
+        setLoading(true);
+        setErr(null);
+
+        // 1) Find the showtime (to get theater_id)
+        const current = showtimes.find((s) => String(s.showtime_id) === String(showtimeId));
+        if (!current) {
+          setSeats([]);
+          return;
+        }
+
+        // 2) All seats for that theater
+        const { data: allSeats, error: e1 } = await supabase
+          .from("seats")
+          .select("seat_id, seat_no, seat_type, theater_id")
+          .eq("theater_id", Number(current.theater_id))
+          .order("seat_no", { ascending: true });
+        if (e1) throw e1;
+
+        // 3) Already confirmed tickets for that showtime
+        const { data: taken, error: e2 } = await supabase
+          .from("tickets")
+          .select("ticket_id, showtime_id, seat_id, ticket_status")
+          .eq("showtime_id", Number(showtimeId))
+          .eq("ticket_status", "CONFIRMED");
+        if (e2) throw e2;
+
+        const takenIds = new Set((taken ?? []).map((t: Ticket) => t.seat_id));
+        const available = (allSeats ?? []).filter((s: any) => !takenIds.has(s.seat_id));
+
+        if (!alive) return;
+        setSeats(available as Seat[]);
+      } catch (e: any) {
+        if (!alive) return;
+        setErr(e?.message ?? "Failed to load seats.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [supabase, showtimeId, showtimes]);
+
+  /** Dropdown options derived from data */
+  const theaterOptions: Option[] = useMemo(
+    () =>
+      theaters.map((t) => ({
+        id: t.theater_id,
+        label: `${t.theater_name} — ${t.location}`,
+      })),
+    [theaters]
   );
 
-  const originalPrice = selectedShowtime?.price ?? 0;
+  const movieOptions: Option[] = useMemo(
+    () =>
+      movies.map((m) => ({
+        id: m.movie_id,
+        label: m.title,
+      })),
+    [movies]
+  );
+
+  const showtimeOptions: { id: number | string; label: string; price: number }[] = useMemo(
+    () =>
+      showtimes.map((st) => ({
+        id: st.showtime_id,
+        label: showtimeLabel(st),
+        price: Number(st.ticket_price),
+      })),
+    [showtimes]
+  );
+
+  const seatOptions: Option[] = useMemo(
+    () =>
+      seats.map((s) => ({
+        id: s.seat_id,
+        label: s.seat_no,
+      })),
+    [seats]
+  );
+
+  // Derived values for preview
+  const selectedShowtime = useMemo(
+    () => showtimes.find((s) => String(s.showtime_id) === String(showtimeId)),
+    [showtimes, showtimeId]
+  );
+
+  const originalPrice = Number(selectedShowtime?.ticket_price ?? 0);
   const discPct = discountList.find((d) => d.code === discount)?.percent ?? 0;
-  const discountAmount = Math.round((originalPrice * discPct) / 100 * 100) / 100;
+  const discountAmount = Math.round(((originalPrice * discPct) / 100) * 100) / 100;
   const total = Math.max(0, Math.round((originalPrice - discountAmount) * 100) / 100);
 
   /** Step navigation */
@@ -120,7 +303,7 @@ export default function BookPage() {
     }
   }, [step, customerName, theaterId, movieId, showtimeId, seatId, discount, payment]);
 
-  /** Renderers per step */
+  /** UI Part — same as Step 2 (minor additions for errors/spinners) */
   const StepHeader = (
     <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18 }}>
       <h1
@@ -136,9 +319,10 @@ export default function BookPage() {
       <Link
         href="/"
         style={{
+          alignSelf: "start",
           border: "1px solid #111",
           borderRadius: 4,
-          padding: "6px 10px",
+          padding: "8px 10px",
           color: "#111",
           textDecoration: "none",
         }}
@@ -282,11 +466,13 @@ export default function BookPage() {
                 <option value="">Select showtime</option>
                 {showtimeOptions.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.label} {/* e.g., 2025-10-28 10:00 — ₱300.00 */}
+                    {s.label}
                   </option>
                 ))}
               </Select>
             </Field>
+            {loading && <div style={{ color: "#666" }}>Loading…</div>}
+            {err && <div style={{ color: "crimson" }}>{err}</div>}
             {Nav}
           </>
         );
@@ -312,6 +498,8 @@ export default function BookPage() {
                 ))}
               </Select>
             </Field>
+            {loading && <div style={{ color: "#666" }}>Loading…</div>}
+            {err && <div style={{ color: "crimson" }}>{err}</div>}
             {Nav}
           </>
         );
@@ -353,6 +541,12 @@ export default function BookPage() {
         );
 
       case 7:
+        // Theater label for preview
+        const theaterLabel =
+          theaterOptions.find((t) => String(t.id) === String(theaterId))?.label || "—";
+        const movieLabel =
+          movieOptions.find((m) => String(m.id) === String(movieId))?.label || "—";
+
         return (
           <>
             <div style={{ marginTop: 6, marginBottom: 12 }}>
@@ -376,30 +570,29 @@ export default function BookPage() {
                 <p>
                   <strong>Name:</strong> {customerName || "—"}
                 </p>
-                {/* We’ll fill these from fetched values in Step 3 */}
                 <p>
-                  <strong>Cinema:</strong> {/* Theater Name — Location */}
+                  <strong>Cinema:</strong> {theaterLabel}
                 </p>
                 <p>
-                  <strong>Movie:</strong> {/* Movie title */}
+                  <strong>Movie:</strong> {movieLabel}
                 </p>
                 <p>
                   <strong>Showtime:</strong>{" "}
-                  {selectedShowtime?.label || "—"}
+                  {selectedShowtime ? showtimeLabel(selectedShowtime) : "—"}
                 </p>
                 <p>
                   <strong>Seat:</strong> {seatLabel || "—"}
                 </p>
                 <p>
-                  <strong>Original:</strong> ₱{originalPrice.toFixed(2)}
+                  <strong>Original:</strong> {peso(originalPrice)}
                 </p>
                 <p>
                   <strong>Discount:</strong>{" "}
-                  {discountList.find((d) => d.code === discount)?.label}{" "}
-                  ({discPct}%) → ₱{discountAmount.toFixed(2)}
+                  {discountList.find((d) => d.code === discount)?.label} ({discPct}
+                  %) → {peso(discountAmount)}
                 </p>
                 <p>
-                  <strong>Total:</strong> ₱{total.toFixed(2)}
+                  <strong>Total:</strong> {peso(total)}
                 </p>
                 <p>
                   <strong>Pay via:</strong> {payment}
@@ -410,8 +603,9 @@ export default function BookPage() {
             <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
               <Btn
                 onClick={() => {
-                  // NEXT STEP: will hook this to API to save ticket
-                  alert("In Step 4 we’ll save this to Supabase. For now, UI only.");
+                  alert(
+                    "Looks good! In Step 4 we’ll save this to Supabase (tickets + payments) and then ask Admin to Add another or Show Summary."
+                  );
                 }}
               >
                 Confirm &amp; Save Ticket
@@ -470,6 +664,13 @@ export default function BookPage() {
             />
           </div>
         </div>
+
+        {err && step < 7 && (
+          <div style={{ color: "crimson", marginBottom: 8 }}>{err}</div>
+        )}
+        {loading && step < 7 && (
+          <div style={{ color: "#666", marginBottom: 8 }}>Loading…</div>
+        )}
 
         <StepContent />
       </Box>
