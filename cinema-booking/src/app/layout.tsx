@@ -1,17 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Background1975 from "@/components/Background1975";
+import Background1975 from "@/components/Background1975"; // adjust path if you don't use "@/"
 
 export const metadata: Metadata = {
   title: "Cinema Booking",
   description: "Admin booking flow",
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body
@@ -20,11 +16,17 @@ export default function RootLayout({
           color: "var(--fg)",
           minHeight: "100vh",
           margin: 0,
-          position: "relative", // ensure stacking context above bg
+          position: "relative",   // stacking context
+          overflowX: "hidden",    // avoid horizontal scroll from FX
         }}
       >
+        {/* Background FX behind everything */}
         <Background1975 />
-        {children}
+
+        {/* App content above FX */}
+        <div style={{ position: "relative", zIndex: 1 }}>
+          {children}
+        </div>
       </body>
     </html>
   );
