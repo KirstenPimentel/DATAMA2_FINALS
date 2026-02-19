@@ -2,8 +2,12 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { createClient } from "@/lib/supabaseClient"; // your existing client
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabaseClient";
 
+/** ---------------------------
+ *    Types & Helpers
+ *  --------------------------*/
 type DiscountCode = "REGULAR" | "PWD" | "SENIOR" | "STUDENT";
 type PaymentMethod = "GCASH" | "CARD" | "CASH";
 
@@ -15,7 +19,7 @@ type Showtime = {
   showtime_id: number;
   movie_id: number;
   theater_id: number;
-  show_date: string; // ISO date
+  show_date: string; // YYYY-MM-DD
   show_time: string; // HH:mm:ss
   ticket_price: number;
 };
@@ -24,9 +28,9 @@ type Ticket = {
   ticket_id: number;
   showtime_id: number;
   seat_id: number;
-  ticket_status: "CONFIRMED" | "CANCELLED" | "REFUNDED" | string;
 };
 
+/** Discount options */
 const discountList: { code: DiscountCode; label: string; percent: number }[] = [
   { code: "REGULAR", label: "Regular", percent: 0 },
   { code: "PWD", label: "PWD", percent: 20 },
@@ -34,28 +38,32 @@ const discountList: { code: DiscountCode; label: string; percent: number }[] = [
   { code: "STUDENT", label: "Student", percent: 10 },
 ];
 
-/** Helpers */
 const peso = (n: number) =>
-  `₱${(n ?? 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  `₱${(n ?? 0).toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 
 const showtimeLabel = (st: Showtime) => {
-  // Format like: 2025-10-28 10:00 — ₱300.00
-  const time = (st.show_time || "").slice(0, 5); // HH:mm
-  return `${st.show_date} ${time}:00 — ${peso(Number(st.ticket_price))}`;
+  const hhmm = (st.show_time || "").slice(0, 5);
+  return `${st.show_date} ${hhmm}:00 — ${peso(Number(st.ticket_price))}`;
 };
 
+/** ---------------------------
+ *    UI Primitives
+ *  --------------------------*/
 const Box: React.FC<React.PropsWithChildren<{ style?: React.CSSProperties }>> = ({
   children,
   style,
 }) => (
   <section
+    className="card-1975"
     style={{
       width: "min(820px, 92vw)",
-      background: "#fff",
-      border: "1px solid #d4d4d4",
+      background: "var(--card-bg)",
+      border: "1px solid var(--border)",
       borderRadius: 6,
       padding: "28px 32px",
-      boxShadow: "0 2px 0 rgba(0,0,0,0.06)",
       ...style,
     }}
   >
@@ -75,12 +83,13 @@ const Btn: React.FC<
     type={type}
     onClick={onClick}
     disabled={disabled}
+    className={`btn-1975 ${variant === "primary" ? "btn-1975--filled" : ""}`}
     style={{
+      border: "1px solid var(--border)",
+      background: variant === "primary" ? "var(--fg)" : "transparent",
+      color: variant === "primary" ? "var(--bg)" : "var(--fg)",
       padding: "8px 14px",
       borderRadius: 4,
-      border: "1px solid #111",
-      background: variant === "primary" ? "#111" : "#fff",
-      color: variant === "primary" ? "#fff" : "#111",
       letterSpacing: "0.02em",
       cursor: disabled ? "not-allowed" : "pointer",
       opacity: disabled ? 0.6 : 1,
@@ -90,8 +99,55 @@ const Btn: React.FC<
   </button>
 );
 
+const Field: React.FC<React.PropsWithChildren<{ label: string; helper?: string }>> = ({
+  label,
+  helper,
+  children,
+}) => (
+  <div style={{ marginBottom: 16 }}>
+    <div style={{ fontWeight: 600, marginBottom: 8 }}>{label}</div>
+    {children}
+    {helper ? (
+      <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>{helper}</div>
+    ) : null}
+  </div>
+);
+
+const SelectEl = (props: JSX.IntrinsicElements["select"]) => (
+  <select
+    {...props}
+    className="select-1975"
+    style={{
+      width: "100%",
+      border: "1px solid var(--border)",
+      borderRadius: 4,
+      padding: "10px 12px",
+      background: "#0f0f0f",
+      color: "var(--fg)",
+    }}
+  />
+);
+
+const InputEl = (props: JSX.IntrinsicElements["input"]) => (
+  <input
+    {...props}
+    className="input-1975"
+    style={{
+      width: "100%",
+      border: "1px solid var(--border)",
+      borderRadius: 4,
+      padding: "10px 12px",
+      background: "#0f0f0f",
+      color: "var(--fg)",
+    }}
+  />
+);
+
+/** ---------------------------
+ *    Page
+ *  --------------------------*/
 export default function BookPage() {
-  const supabase = createClient();
+  const router = useRouter();
 
   const [step, setStep] = useState(0);
 
@@ -113,6 +169,10 @@ export default function BookPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Save state
+  const [saving, setSaving] = useState(false);
+  const [savedTicketId, setSavedTicketId] = useState<number | null>(null);
+
   /** Load theaters + movies once */
   useEffect(() => {
     let alive = true;
@@ -121,7 +181,10 @@ export default function BookPage() {
         setLoading(true);
         setErr(null);
         const [{ data: th, error: e1 }, { data: mv, error: e2 }] = await Promise.all([
-          supabase.from("theaters").select("theater_id, theater_name, location").order("theater_name", { ascending: true }),
+          supabase
+            .from("theaters")
+            .select("theater_id, theater_name, location")
+            .order("theater_name", { ascending: true }),
           supabase.from("movies").select("movie_id, title").order("title", { ascending: true }),
         ]);
         if (e1) throw e1;
@@ -139,10 +202,9 @@ export default function BookPage() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Load showtimes when theater or movie changes */
+  /** Load showtimes when theater or movie changes (hide past showtimes) */
   useEffect(() => {
     if (!theaterId || !movieId) {
       setShowtimes([]);
@@ -153,6 +215,7 @@ export default function BookPage() {
       try {
         setLoading(true);
         setErr(null);
+
         const { data, error } = await supabase
           .from("showtimes")
           .select("showtime_id, movie_id, theater_id, show_date, show_time, ticket_price")
@@ -160,9 +223,24 @@ export default function BookPage() {
           .eq("movie_id", Number(movieId))
           .order("show_date", { ascending: true })
           .order("show_time", { ascending: true });
+
         if (error) throw error;
+
+        // Filter out past showtimes using local date+time
+        const now = new Date();
+        const today = now.toISOString().slice(0, 10); // YYYY-MM-DD
+        const nowTime = now.toTimeString().slice(0, 8); // HH:mm:ss
+
+        const upcoming = (data ?? []).filter((st: any) => {
+          const d = String(st.show_date ?? "");
+          const t = String(st.show_time ?? "");
+          if (d > today) return true;
+          if (d < today) return false;
+          return t >= nowTime;
+        });
+
         if (!alive) return;
-        setShowtimes((data ?? []) as Showtime[]);
+        setShowtimes(upcoming as Showtime[]);
       } catch (e: any) {
         if (!alive) return;
         setErr(e?.message ?? "Failed to load showtimes.");
@@ -173,7 +251,7 @@ export default function BookPage() {
     return () => {
       alive = false;
     };
-  }, [supabase, theaterId, movieId]);
+  }, [theaterId, movieId]);
 
   /** Load available seats when a showtime is chosen */
   useEffect(() => {
@@ -202,12 +280,11 @@ export default function BookPage() {
           .order("seat_no", { ascending: true });
         if (e1) throw e1;
 
-        // 3) Already confirmed tickets for that showtime
+        // 3) Tickets for that showtime (no enum filter)
         const { data: taken, error: e2 } = await supabase
           .from("tickets")
-          .select("ticket_id, showtime_id, seat_id, ticket_status")
-          .eq("showtime_id", Number(showtimeId))
-          .eq("ticket_status", "CONFIRMED");
+          .select("ticket_id, showtime_id, seat_id")
+          .eq("showtime_id", Number(showtimeId));
         if (e2) throw e2;
 
         const takenIds = new Set((taken ?? []).map((t: Ticket) => t.seat_id));
@@ -226,7 +303,7 @@ export default function BookPage() {
     return () => {
       alive = false;
     };
-  }, [supabase, showtimeId, showtimes]);
+  }, [showtimeId, showtimes]);
 
   /** Dropdown options derived from data */
   const theaterOptions: Option[] = useMemo(
@@ -277,11 +354,68 @@ export default function BookPage() {
   const discountAmount = Math.round(((originalPrice * discPct) / 100) * 100) / 100;
   const total = Math.max(0, Math.round((originalPrice - discountAmount) * 100) / 100);
 
-  /** Step navigation */
-  const next = () => setStep((s) => s + 1);
+  /** Navigation — with guard on Step 4 -> Step 5 */
+  const next = async () => {
+    if (step === 4) {
+      if (!showtimeId || !seatId) return;
+      try {
+        setLoading(true);
+        setErr(null);
+
+        // Ensure showtime still exists and not past
+        const { data: stData, error: stErr } = await supabase
+          .from("showtimes")
+          .select("showtime_id, show_date, show_time")
+          .eq("showtime_id", Number(showtimeId))
+          .maybeSingle();
+        if (stErr) throw stErr;
+        if (!stData) {
+          setErr("Selected showtime is no longer available. Please choose another showtime.");
+          setSeatId("");
+          setSeatLabel("");
+          setLoading(false);
+          return;
+        }
+        const now = new Date();
+        const today = now.toISOString().slice(0, 10);
+        const nowTime = now.toTimeString().slice(0, 8);
+        const d = String(stData.show_date ?? "");
+        const t = String(stData.show_time ?? "");
+        if (d < today || (d === today && t < nowTime)) {
+          setErr("Selected showtime has passed. Please choose another showtime.");
+          setSeatId("");
+          setSeatLabel("");
+          setLoading(false);
+          return;
+        }
+
+        // Check if the selected seat is still free
+        const { data: seatTakenRow, error: tkErr } = await supabase
+          .from("tickets")
+          .select("ticket_id")
+          .eq("showtime_id", Number(showtimeId))
+          .eq("seat_id", Number(seatId))
+          .maybeSingle();
+        if (tkErr) throw tkErr;
+        if (seatTakenRow) {
+          setErr("Seat just got taken. Please pick another seat.");
+          setLoading(false);
+          return;
+        }
+      } catch (e: any) {
+        setErr(e?.message ?? "Failed to validate seat availability.");
+        setLoading(false);
+        return;
+      }
+    }
+
+    setStep((s) => s + 1);
+    setLoading(false);
+  };
+
   const back = () => setStep((s) => Math.max(0, s - 1));
 
-  /** Validation per step (basic) */
+  /** Validation per step */
   const canNext = useMemo(() => {
     switch (step) {
       case 0:
@@ -303,111 +437,177 @@ export default function BookPage() {
     }
   }, [step, customerName, theaterId, movieId, showtimeId, seatId, discount, payment]);
 
-  /** UI Part — same as Step 2 (minor additions for errors/spinners) */
-  const StepHeader = (
-    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18 }}>
-      <h1
-        style={{
-          fontSize: 28,
-          letterSpacing: "0.16em",
-          fontWeight: 700,
-          color: "#111",
-        }}
-      >
-        ADD CUSTOMER
-      </h1>
-      <Link
-        href="/"
-        style={{
-          alignSelf: "start",
-          border: "1px solid #111",
-          borderRadius: 4,
-          padding: "8px 10px",
-          color: "#111",
-          textDecoration: "none",
-        }}
-      >
-        ← Back to Start
-      </Link>
-    </div>
-  );
+  /** Save handler — minimal insert + required fields */
+  const handleConfirmSave = async () => {
+    if (!customerName || !showtimeId || !seatId) return;
+    setSaving(true);
+    setErr(null);
 
-  const Nav = (
-    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
-      <Btn variant="ghost" onClick={back} disabled={step === 0}>
-        Back
-      </Btn>
-      <Btn onClick={next} disabled={!canNext || step >= 7}>
-        Next
-      </Btn>
-    </div>
-  );
+    try {
+      // Double-check seat still available
+      const { data: taken, error: eCheck } = await supabase
+        .from("tickets")
+        .select("seat_id")
+        .eq("showtime_id", Number(showtimeId));
+      if (eCheck) throw eCheck;
+      const seatTaken = ((taken ?? []) as Array<{ seat_id: string | number }>).some(
+        (t) => String(t.seat_id) === String(seatId)
+      );
+      if (seatTaken) {
+        setErr("Seat just got taken. Please pick another seat.");
+        return;
+      }
 
-  const Field: React.FC<
-    React.PropsWithChildren<{ label: string; helper?: string }>
-  > = ({ label, helper, children }) => (
-    <div style={{ marginBottom: 16 }}>
-      <div style={{ fontWeight: 600, marginBottom: 8 }}>{label}</div>
-      {children}
-      {helper ? (
-        <div style={{ color: "#666", fontSize: 12, marginTop: 6 }}>{helper}</div>
-      ) : null}
-    </div>
-  );
+      // Insert ticket
+      const minimalTicket: Record<string, any> = {
+        customer_name: customerName,
+        showtime_id: Number(showtimeId),
+        seat_id: Number(seatId),
+        booking_date: new Date().toISOString(),
+        ticket_status: "RESERVED",
+        ticket_price: originalPrice,
+        final_price: total,
+      };
 
-  const Select = (props: JSX.IntrinsicElements["select"]) => (
-    <select
-      {...props}
+      const insertRes = await supabase
+        .from("tickets")
+        .insert(minimalTicket)
+        .select("ticket_id")
+        .single();
+
+      // DB unique seat conflict
+      if (insertRes.error) {
+        if ((insertRes.error as any).code === "23505") {
+          setErr("Seat just got taken. Please pick another seat.");
+          return;
+        }
+        throw insertRes.error;
+      }
+
+      const ticketId: number = insertRes.data.ticket_id;
+
+      // Insert payment
+      const payRes = await supabase.from("payments").insert({
+        ticket_id: ticketId,
+        amount: total,
+        payment_method: payment,
+        payment_status: "PAID",
+        payment_date: new Date().toISOString(),
+      } as any);
+
+      if (payRes.error) throw payRes.error;
+
+      setSavedTicketId(ticketId);
+    } catch (e: any) {
+      setErr(e?.message ?? "Failed to save ticket.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Reset form for "Add another customer" */
+  const resetAll = () => {
+    setStep(0);
+    setCustomerName("");
+    setTheaterId("");
+    setMovieId("");
+    setShowtimeId("");
+    setSeatId("");
+    setSeatLabel("");
+    setDiscount("REGULAR");
+    setPayment("CASH");
+    setSavedTicketId(null);
+    setErr(null);
+  };
+
+  /** Render */
+  return (
+    <main
       style={{
-        width: "100%",
-        border: "1px solid #111",
-        borderRadius: 4,
-        padding: "10px 12px",
-        background: "#fff",
-        color: "#111",
+        minHeight: "100dvh",
+        display: "grid",
+        placeItems: "center",
+        background: "var(--bg)",
+        color: "var(--fg)",
       }}
-    />
-  );
+    >
+      <Box>
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18 }}>
+          <h1
+            style={{
+              fontSize: 28,
+              letterSpacing: "0.16em",
+              fontWeight: 700,
+              color: "var(--fg)",
+            }}
+          >
+            ADD CUSTOMER
+          </h1>
+          <Link href="/">
+            <span className="btn-1975" style={{ borderColor: "var(--border)" }}>
+              ← Back to Start
+            </span>
+          </Link>
+        </div>
 
-  const Input = (props: JSX.IntrinsicElements["input"]) => (
-    <input
-      {...props}
-      style={{
-        width: "100%",
-        border: "1px solid #111",
-        borderRadius: 4,
-        padding: "10px 12px",
-        background: "#fff",
-        color: "#111",
-      }}
-    />
-  );
+        {/* Stepper */}
+        <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+          <div style={{ fontSize: 12, color: "var(--muted)" }}>Step {step + 1} of 8</div>
+          <div
+            aria-hidden
+            style={{
+              height: 6,
+              background: "#111",
+              borderRadius: 999,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${((step + 1) / 8) * 100}%`,
+                background: "var(--fg)",
+                transition: "width .2s ease",
+              }}
+            />
+          </div>
+        </div>
 
-  const StepContent = () => {
-    switch (step) {
-      case 0:
-        return (
+        {/* Errors/Loading */}
+        {err && <div style={{ color: "crimson", marginBottom: 8 }}>{err}</div>}
+        {loading && <div style={{ color: "var(--muted)", marginBottom: 8 }}>Loading…</div>}
+
+        {/* Steps */}
+        {step === 0 && (
           <>
             <Field label="Customer Name">
-              <Input
+              <InputEl
                 placeholder="Enter customer's full name"
                 value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                  setCustomerName(e.target.value)
+                }
               />
             </Field>
-            {Nav}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
+              <Btn variant="ghost" onClick={back} disabled>
+                Back
+              </Btn>
+              <Btn onClick={() => void next()} disabled={!canNext}>
+                Next
+              </Btn>
+            </div>
           </>
-        );
+        )}
 
-      case 1:
-        return (
+        {step === 1 && (
           <>
             <Field label="Theater">
-              <Select
+              <SelectEl
                 value={theaterId}
-                onChange={(e) => {
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                   setTheaterId(e.target.value);
-                  // reset downstream
                   setMovieId("");
                   setShowtimeId("");
                   setSeatId("");
@@ -420,19 +620,25 @@ export default function BookPage() {
                     {t.label}
                   </option>
                 ))}
-              </Select>
+              </SelectEl>
             </Field>
-            {Nav}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
+              <Btn variant="ghost" onClick={back}>
+                Back
+              </Btn>
+              <Btn onClick={() => void next()} disabled={!canNext}>
+                Next
+              </Btn>
+            </div>
           </>
-        );
+        )}
 
-      case 2:
-        return (
+        {step === 2 && (
           <>
             <Field label="Movie">
-              <Select
+              <SelectEl
                 value={movieId}
-                onChange={(e) => {
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                   setMovieId(e.target.value);
                   setShowtimeId("");
                   setSeatId("");
@@ -445,19 +651,25 @@ export default function BookPage() {
                     {m.label}
                   </option>
                 ))}
-              </Select>
+              </SelectEl>
             </Field>
-            {Nav}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
+              <Btn variant="ghost" onClick={back}>
+                Back
+              </Btn>
+              <Btn onClick={() => void next()} disabled={!canNext}>
+                Next
+              </Btn>
+            </div>
           </>
-        );
+        )}
 
-      case 3:
-        return (
+        {step === 3 && (
           <>
             <Field label="Showtime">
-              <Select
+              <SelectEl
                 value={showtimeId}
-                onChange={(e) => {
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                   setShowtimeId(e.target.value);
                   setSeatId("");
                   setSeatLabel("");
@@ -469,21 +681,25 @@ export default function BookPage() {
                     {s.label}
                   </option>
                 ))}
-              </Select>
+              </SelectEl>
             </Field>
-            {loading && <div style={{ color: "#666" }}>Loading…</div>}
-            {err && <div style={{ color: "crimson" }}>{err}</div>}
-            {Nav}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
+              <Btn variant="ghost" onClick={back}>
+                Back
+              </Btn>
+              <Btn onClick={() => void next()} disabled={!canNext}>
+                Next
+              </Btn>
+            </div>
           </>
-        );
+        )}
 
-      case 4:
-        return (
+        {step === 4 && (
           <>
             <Field label="Seat">
-              <Select
+              <SelectEl
                 value={seatId}
-                onChange={(e) => {
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                   const v = e.target.value;
                   setSeatId(v);
                   const opt = seatOptions.find((s) => String(s.id) === String(v));
@@ -496,59 +712,74 @@ export default function BookPage() {
                     {s.label}
                   </option>
                 ))}
-              </Select>
+              </SelectEl>
             </Field>
-            {loading && <div style={{ color: "#666" }}>Loading…</div>}
-            {err && <div style={{ color: "crimson" }}>{err}</div>}
-            {Nav}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
+              <Btn variant="ghost" onClick={back}>
+                Back
+              </Btn>
+              <Btn onClick={() => void next()} disabled={!canNext}>
+                Next
+              </Btn>
+            </div>
           </>
-        );
+        )}
 
-      case 5:
-        return (
+        {step === 5 && (
           <>
             <Field label="Discount">
-              <Select
+              <SelectEl
                 value={discount}
-                onChange={(e) => setDiscount(e.target.value as DiscountCode)}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                  setDiscount(e.target.value as DiscountCode)
+                }
               >
                 {discountList.map((d) => (
                   <option key={d.code} value={d.code}>
                     {d.label} {d.percent ? `(${d.percent}%)` : ""}
                   </option>
                 ))}
-              </Select>
+              </SelectEl>
             </Field>
-            {Nav}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
+              <Btn variant="ghost" onClick={back}>
+                Back
+              </Btn>
+              <Btn onClick={() => void next()} disabled={!canNext}>
+                Next
+              </Btn>
+            </div>
           </>
-        );
+        )}
 
-      case 6:
-        return (
+        {step === 6 && (
           <>
             <Field label="Payment Method">
-              <Select
+              <SelectEl
                 value={payment}
-                onChange={(e) => setPayment(e.target.value as PaymentMethod)}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                  setPayment(e.target.value as PaymentMethod)
+                }
               >
                 <option value="GCASH">GCash</option>
                 <option value="CARD">Card</option>
                 <option value="CASH">Cash</option>
-              </Select>
+              </SelectEl>
             </Field>
-            {Nav}
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
+              <Btn variant="ghost" onClick={back}>
+                Back
+              </Btn>
+              <Btn onClick={() => void next()} disabled={!canNext}>
+                Next
+              </Btn>
+            </div>
           </>
-        );
+        )}
 
-      case 7:
-        // Theater label for preview
-        const theaterLabel =
-          theaterOptions.find((t) => String(t.id) === String(theaterId))?.label || "—";
-        const movieLabel =
-          movieOptions.find((m) => String(m.id) === String(movieId))?.label || "—";
-
-        return (
+        {step === 7 && (
           <>
+            {/* Preview */}
             <div style={{ marginTop: 6, marginBottom: 12 }}>
               <div
                 style={{
@@ -562,7 +793,7 @@ export default function BookPage() {
               </div>
               <div
                 style={{
-                  border: "1px solid #ccc",
+                  border: "1px solid var(--border)",
                   borderRadius: 6,
                   padding: "14px 16px",
                 }}
@@ -571,10 +802,12 @@ export default function BookPage() {
                   <strong>Name:</strong> {customerName || "—"}
                 </p>
                 <p>
-                  <strong>Cinema:</strong> {theaterLabel}
+                  <strong>Cinema:</strong>{" "}
+                  {theaterOptions.find((t) => String(t.id) === String(theaterId))?.label || "—"}
                 </p>
                 <p>
-                  <strong>Movie:</strong> {movieLabel}
+                  <strong>Movie:</strong>{" "}
+                  {movieOptions.find((m) => String(m.id) === String(movieId))?.label || "—"}
                 </p>
                 <p>
                   <strong>Showtime:</strong>{" "}
@@ -600,79 +833,26 @@ export default function BookPage() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
-              <Btn
-                onClick={() => {
-                  alert(
-                    "Looks good! In Step 4 we’ll save this to Supabase (tickets + payments) and then ask Admin to Add another or Show Summary."
-                  );
-                }}
-              >
-                Confirm &amp; Save Ticket
-              </Btn>
-              <Btn variant="ghost" onClick={back}>
-                Back
-              </Btn>
-            </div>
+            {/* Actions */}
+            {savedTicketId ? (
+              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                <Btn onClick={resetAll}>Add another customer</Btn>
+                <Btn variant="ghost" onClick={() => router.push("/admin/summary")}>
+                  Show summary
+                </Btn>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+                <Btn onClick={handleConfirmSave} disabled={saving}>
+                  {saving ? "Saving…" : "Confirm & Save Ticket"}
+                </Btn>
+                <Btn variant="ghost" onClick={back} disabled={saving}>
+                  Back
+                </Btn>
+              </div>
+            )}
           </>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  return (
-    <main
-      style={{
-        minHeight: "100dvh",
-        display: "grid",
-        placeItems: "center",
-        background: "#f6f6f6",
-      }}
-    >
-      <Box>
-        {StepHeader}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr",
-            gap: 8,
-            marginBottom: 12,
-          }}
-        >
-          {/* Simple step indicator */}
-          <div style={{ fontSize: 12, color: "#666" }}>
-            Step {step + 1} of 8
-          </div>
-          <div
-            aria-hidden
-            style={{
-              height: 6,
-              background: "#eaeaea",
-              borderRadius: 999,
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                height: "100%",
-                width: `${((step + 1) / 8) * 100}%`,
-                background: "#111",
-                transition: "width .2s ease",
-              }}
-            />
-          </div>
-        </div>
-
-        {err && step < 7 && (
-          <div style={{ color: "crimson", marginBottom: 8 }}>{err}</div>
         )}
-        {loading && step < 7 && (
-          <div style={{ color: "#666", marginBottom: 8 }}>Loading…</div>
-        )}
-
-        <StepContent />
       </Box>
     </main>
   );
