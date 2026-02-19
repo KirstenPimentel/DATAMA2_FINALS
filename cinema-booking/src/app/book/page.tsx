@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabaseClient';
 
-/** Types aligned with your DB schema / views */
 type Theater = { theater_id: number; theater_name: string; location: string };
 type Movie = { movie_id: number; title: string };
 type Showtime = {
@@ -14,8 +13,8 @@ type Showtime = {
   theater_id: number;
   theater_name: string;
   location: string;
-  show_date: string;     // 'YYYY-MM-DD'
-  show_time: string;     // 'HH:mm:ss'
+  show_date: string;
+  show_time: string;
   ticket_price: number;
 };
 type Seat = { seat_id: number; seat_no: string; seat_type: 'VIP' | 'Regular' };
@@ -23,10 +22,8 @@ type DiscountType = 'REGULAR' | 'PWD' | 'SENIOR_CITIZEN' | 'STUDENT';
 type PaymentMethod = 'GCASH' | 'CARD' | 'CASH';
 
 export default function BookPage() {
-  // Wizard step: 1..8
   const [step, setStep] = useState<number>(1);
 
-  // Form states
   const [customerName, setCustomerName] = useState('');
   const [theaterId, setTheaterId] = useState<number | null>(null);
   const [movieId, setMovieId] = useState<number | null>(null);
@@ -35,22 +32,18 @@ export default function BookPage() {
   const [discountType, setDiscountType] = useState<DiscountType>('REGULAR');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('GCASH');
 
-  // Lists
   const [theaters, setTheaters] = useState<Theater[]>([]);
   const [movies, setMovies] = useState<Movie[]>([]);
   const [showtimes, setShowtimes] = useState<Showtime[]>([]);
   const [seats, setSeats] = useState<Seat[]>([]);
 
-  // Price
   const [price, setPrice] = useState<number>(0);
   const [discountPct, setDiscountPct] = useState<number>(0);
 
-  // Save state
   const [saving, setSaving] = useState(false);
   const [ticketId, setTicketId] = useState<number | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Initial loads
   useEffect(() => {
     (async () => {
       setErrorMsg(null);
@@ -73,11 +66,11 @@ export default function BookPage() {
     })();
   }, []);
 
-  // Load showtimes when theater or movie changes
   useEffect(() => {
     (async () => {
       setErrorMsg(null);
       if (!theaterId || !movieId) return;
+
       const { data, error } = await supabase
         .from('showtime_catalog')
         .select('*')
@@ -97,13 +90,11 @@ export default function BookPage() {
     })();
   }, [theaterId, movieId]);
 
-  // Load available seats when showtime changes
   useEffect(() => {
     (async () => {
       setErrorMsg(null);
       if (!showtimeId || !theaterId) return;
 
-      // Seats already taken for this showtime
       const { data: sold, error: soldErr } = await supabase
         .from('tickets')
         .select('seat_id')
@@ -115,7 +106,6 @@ export default function BookPage() {
       }
       const soldIds = new Set<number>((sold ?? []).map((s: any) => s.seat_id));
 
-      // All seats in the theater
       const { data: allSeats, error: seatsErr } = await supabase
         .from('seats')
         .select('seat_id, seat_no, seat_type')
@@ -133,51 +123,52 @@ export default function BookPage() {
     })();
   }, [showtimeId, theaterId]);
 
-  // Load base price and discount % when showtime or discount changes
   useEffect(() => {
     (async () => {
       setErrorMsg(null);
       if (!showtimeId) return;
 
-      // Base price
       const { data: st, error: stErr } = await supabase
         .from('showtimes')
         .select('ticket_price')
         .eq('showtime_id', showtimeId)
-        .single();
+        .limit(1);
 
       if (stErr) {
         setErrorMsg(stErr.message);
         return;
       }
-      const base = st?.ticket_price ?? 0;
+      const base = st?.[0]?.ticket_price ?? 0;
 
-      // Discount percentage: prefer showtime-specific then global
-      const { data: sd, error: sdErr } = await supabase
+      // showtime-specific discount
+      const { data: sdRows, error: sdErr } = await supabase
         .from('discounts')
         .select('discount_percentage')
         .eq('showtime_id', showtimeId)
         .eq('discount_type', discountType)
-        .maybeSingle();
+        .limit(1);
 
       if (sdErr) {
         setErrorMsg(sdErr.message);
         return;
       }
 
-      let pct: number | null = (sd as any)?.discount_percentage ?? null;
+      let pct: number | null = sdRows?.[0]?.discount_percentage ?? null;
+
       if (pct === null) {
-        const { data: gd, error: gdErr } = await supabase
+        // global discount
+        const { data: gdRows, error: gdErr } = await supabase
           .from('discounts')
           .select('discount_percentage')
           .is('showtime_id', null)
           .eq('discount_type', discountType)
-          .single();
+          .limit(1);
+
         if (gdErr) {
           setErrorMsg(gdErr.message);
           return;
         }
-        pct = (gd as any)?.discount_percentage ?? 0;
+        pct = gdRows?.[0]?.discount_percentage ?? 0;
       }
 
       setPrice(base);
@@ -185,7 +176,6 @@ export default function BookPage() {
     })();
   }, [showtimeId, discountType]);
 
-  // Derived price values
   const discountAmount = useMemo(() => {
     return Math.round((price * discountPct / 100) * 100) / 100;
   }, [price, discountPct]);
@@ -194,7 +184,6 @@ export default function BookPage() {
     return Math.round((price - discountAmount) * 100) / 100;
   }, [price, discountAmount]);
 
-  // Navigation
   const canNext = useMemo(() => {
     switch (step) {
       case 1: return customerName.trim().length > 0;
@@ -211,13 +200,11 @@ export default function BookPage() {
   const next = () => setStep(s => Math.min(8, s + 1));
   const prev = () => setStep(s => Math.max(1, s - 1));
 
-  // Save ticket + payment
   async function saveTicket() {
     setErrorMsg(null);
     if (!customerName || !showtimeId || !seatId) return;
     setSaving(true);
 
-    // Insert ticket
     const { data: ticket, error: tErr } = await supabase
       .from('tickets')
       .insert({
@@ -232,6 +219,7 @@ export default function BookPage() {
         final_price: finalPrice
       })
       .select('ticket_id')
+      .limit(1)
       .single();
 
     if (tErr || !ticket) {
@@ -241,7 +229,6 @@ export default function BookPage() {
     }
     setTicketId(ticket.ticket_id);
 
-    // Insert payment
     const { error: pErr } = await supabase.from('payments').insert({
       ticket_id: ticket.ticket_id,
       amount: finalPrice,
@@ -255,7 +242,6 @@ export default function BookPage() {
     }
   }
 
-  // Helpers for preview labels
   const chosenShowtime = showtimes.find(s => s.showtime_id === showtimeId);
   const chosenSeat = seats.find(s => s.seat_id === seatId);
 
@@ -265,7 +251,7 @@ export default function BookPage() {
         <div className="space-y-6">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h1>ADD CUSTOMER</h1>
-            / ← Back to Start</Link>
+            <Link href="/" className="btn-1975">← Back to Start</Link>
           </div>
 
           {errorMsg && (
@@ -274,7 +260,6 @@ export default function BookPage() {
             </div>
           )}
 
-          {/* Step blocks */}
           {step === 1 && (
             <div>
               <label className="muted-1975">Customer Name</label>
@@ -419,19 +404,14 @@ export default function BookPage() {
                     Ticket saved (ID: {ticketId})
                   </div>
                   <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    /book
-                      <span className="btn-1975">Add Customer</span>
-                    </Link>
-                    /admin/summary
-                      <span className="btn-1975">Show Summary</span>
-                    </Link>
+                    <Link href="/book" className="btn-1975">Add Customer</Link>
+                    <Link href="/admin/summary" className="btn-1975">Show Summary</Link>
                   </div>
                 </div>
               )}
             </div>
           )}
 
-          {/* Nav buttons */}
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <button className="btn-1975" onClick={prev} disabled={step === 1}>Back</button>
             {step < 8 && (

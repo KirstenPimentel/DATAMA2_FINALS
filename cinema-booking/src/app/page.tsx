@@ -9,16 +9,12 @@ export default function Home() {
           <p className="text-center muted-1975">What would you like to do?</p>
 
           <div className="gap-4" style={{ display: 'flex', flexDirection: 'column' }}>
-            <div className="text-center">
-              /book
-                <span className="btn-1975">Add Customer</span>
-              </Link>
-            </div>
-            <div className="text-center">
-              /admin/summary
-                <span className="btn-1975">Show Summary</span>
-              </Link>
-            </div>
+            <Link href="/book" className="btn-1975" style={{ alignSelf: 'center' }}>
+              Add Customer
+            </Link>
+            <Link href="/admin/summary" className="btn-1975" style={{ alignSelf: 'center' }}>
+              Show Summary
+            </Link>
           </div>
         </div>
       </div>
