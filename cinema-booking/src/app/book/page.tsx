@@ -1,388 +1,478 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { supabase } from '@/lib/supabaseClient';
+import Link from "next/link";
+import { useMemo, useState } from "react";
 
-type Theater = { theater_id: number; theater_name: string; location: string };
-type Movie = { movie_id: number; title: string };
-type Showtime = {
-  showtime_id: number;
-  movie_id: number;
-  title: string;
-  theater_id: number;
-  theater_name: string;
-  location: string;
-  show_date: string;
-  show_time: string;
-  ticket_price: number;
-};
-type Seat = { seat_id: number; seat_no: string; seat_type: 'VIP' | 'Regular' };
-type DiscountType = 'REGULAR' | 'PWD' | 'SENIOR_CITIZEN' | 'STUDENT';
-type PaymentMethod = 'GCASH' | 'CARD' | 'CASH';
+
+type DiscountCode = "REGULAR" | "PWD" | "SENIOR" | "STUDENT";
+type PaymentMethod = "GCASH" | "CARD" | "CASH";
+
+type Option = { id: string | number; label: string };
+
+const discountList: { code: DiscountCode; label: string; percent: number }[] = [
+  { code: "REGULAR", label: "Regular", percent: 0 },
+  { code: "PWD", label: "PWD", percent: 20 },
+  { code: "SENIOR", label: "Senior Citizen", percent: 20 },
+  { code: "STUDENT", label: "Student", percent: 10 },
+];
+
+// TEMP OPTIONS (will be fetched later)
+const theaterOptions: Option[] = [];
+const movieOptions: Option[] = [];
+const showtimeOptions: { id: number | string; label: string; price: number }[] =
+  [];
+const seatOptions: Option[] = [];
+
+/** Lightweight layout primitives for minimalist b/w look */
+const Box: React.FC<React.PropsWithChildren<{ style?: React.CSSProperties }>> = ({
+  children,
+  style,
+}) => (
+  <section
+    style={{
+      width: "min(820px, 92vw)",
+      background: "#fff",
+      border: "1px solid #d4d4d4",
+      borderRadius: 6,
+      padding: "28px 32px",
+      boxShadow: "0 2px 0 rgba(0,0,0,0.06)",
+      ...style,
+    }}
+  >
+    {children}
+  </section>
+);
+
+const Btn: React.FC<
+  React.PropsWithChildren<{
+    variant?: "primary" | "ghost";
+    onClick?: () => void;
+    type?: "button" | "submit";
+    disabled?: boolean;
+  }>
+> = ({ variant = "primary", children, onClick, type = "button", disabled }) => (
+  <button
+    type={type}
+    onClick={onClick}
+    disabled={disabled}
+    style={{
+      padding: "8px 14px",
+      borderRadius: 4,
+      border: "1px solid #111",
+      background: variant === "primary" ? "#111" : "#fff",
+      color: variant === "primary" ? "#fff" : "#111",
+      letterSpacing: "0.02em",
+      cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.6 : 1,
+    }}
+  >
+    {children}
+  </button>
+);
 
 export default function BookPage() {
-  const [step, setStep] = useState<number>(1);
+  const [step, setStep] = useState(0);
 
-  const [customerName, setCustomerName] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
-  const [theaterId, setTheaterId] = useState<number | null>(null);
-  const [movieId, setMovieId] = useState<number | null>(null);
-  const [showtimeId, setShowtimeId] = useState<number | null>(null);
-  const [seatId, setSeatId] = useState<number | null>(null);
-  const [discountType, setDiscountType] = useState<DiscountType>('REGULAR');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('GCASH');
+  // Form state
+  const [customerName, setCustomerName] = useState("");
+  const [theaterId, setTheaterId] = useState<string | number>("");
+  const [movieId, setMovieId] = useState<string | number>("");
+  const [showtimeId, setShowtimeId] = useState<string | number>("");
+  const [seatId, setSeatId] = useState<string | number>("");
+  const [seatLabel, setSeatLabel] = useState<string>("");
+  const [discount, setDiscount] = useState<DiscountCode>("REGULAR");
+  const [payment, setPayment] = useState<PaymentMethod>("CASH");
 
-  const [theaters, setTheaters] = useState<Theater[]>([]);
-  const [movies, setMovies] = useState<Movie[]>([]);
-  const [showtimes, setShowtimes] = useState<Showtime[]>([]);
-  const [seats, setSeats] = useState<Seat[]>([]);
-  const [price, setPrice] = useState<number>(0);
-  const [discountPct, setDiscountPct] = useState<number>(0);
-
-  const [saving, setSaving] = useState(false);
-  const [ticketId, setTicketId] = useState<number | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  const isValidEmail = (e: string) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
-
-  // Initial loads
-  useEffect(() => {
-    (async () => {
-      setErrorMsg(null);
-      const { data: th, error: thErr } = await supabase
-        .from('theaters')
-        .select('theater_id,theater_name,location')
-        .order('theater_id', { ascending: true });
-
-      const { data: mv, error: mvErr } = await supabase
-        .from('movies')
-        .select('movie_id,title')
-        .order('title', { ascending: true });
-
-      if (thErr || mvErr) {
-        setErrorMsg(thErr?.message || mvErr?.message || 'Failed to load initial data.');
-        return;
-      }
-      setTheaters(th ?? []);
-      setMovies(mv ?? []);
-    })();
-  }, []);
-
-  // Load showtimes when theater or movie changes
-  useEffect(() => {
-    (async () => {
-      setErrorMsg(null);
-      if (!theaterId || !movieId) return;
-
-      const { data, error } = await supabase
-        .from('showtime_catalog')
-        .select('*')
-        .eq('theater_id', theaterId)
-        .eq('movie_id', movieId)
-        .order('show_date', { ascending: true })
-        .order('show_time', { ascending: true });
-
-      if (error) { setErrorMsg(error.message); return; }
-      setShowtimes((data as Showtime[]) ?? []);
-      setShowtimeId(null);
-      setSeatId(null);
-      setSeats([]);
-    })();
-  }, [theaterId, movieId]);
-
-  // Load available seats when showtime changes
-  useEffect(() => {
-    (async () => {
-      setErrorMsg(null);
-      if (!showtimeId || !theaterId) return;
-
-      const { data: sold, error: soldErr } = await supabase
-        .from('tickets')
-        .select('seat_id')
-        .eq('showtime_id', showtimeId);
-
-      if (soldErr) { setErrorMsg(soldErr.message); return; }
-      const soldIds = new Set<number>((sold ?? []).map((s: any) => s.seat_id));
-
-      const { data: allSeats, error: seatsErr } = await supabase
-        .from('seats')
-        .select('seat_id, seat_no, seat_type')
-        .eq('theater_id', theaterId)
-        .order('seat_no', { ascending: true });
-
-      if (seatsErr) { setErrorMsg(seatsErr.message); return; }
-      const available: Seat[] = (allSeats ?? []).filter(s => !soldIds.has(s.seat_id));
-      setSeats(available);
-      setSeatId(null);
-    })();
-  }, [showtimeId, theaterId]);
-
-  // Load base price + discount
-  useEffect(() => {
-    (async () => {
-      setErrorMsg(null);
-      if (!showtimeId) return;
-
-      const { data: st, error: stErr } = await supabase
-        .from('showtimes')
-        .select('ticket_price')
-        .eq('showtime_id', showtimeId)
-        .limit(1);
-
-      if (stErr) { setErrorMsg(stErr.message); return; }
-      const base = st?.[0]?.ticket_price ?? 0;
-
-      const { data: sdRows, error: sdErr } = await supabase
-        .from('discounts')
-        .select('discount_percentage')
-        .eq('showtime_id', showtimeId)
-        .eq('discount_type', discountType)
-        .limit(1);
-
-      if (sdErr) { setErrorMsg(sdErr.message); return; }
-      let pct: number | null = sdRows?.[0]?.discount_percentage ?? null;
-
-      if (pct === null) {
-        const { data: gdRows, error: gdErr } = await supabase
-          .from('discounts')
-          .select('discount_percentage')
-          .is('showtime_id', null)
-          .eq('discount_type', discountType)
-          .limit(1);
-        if (gdErr) { setErrorMsg(gdErr.message); return; }
-        pct = gdRows?.[0]?.discount_percentage ?? 0;
-      }
-
-      setPrice(base);
-      setDiscountPct(pct || 0);
-    })();
-  }, [showtimeId, discountType]);
-
-  const discountAmount = useMemo(
-    () => Math.round((price * discountPct / 100) * 100) / 100,
-    [price, discountPct]
-  );
-  const finalPrice = useMemo(
-    () => Math.round((price - discountAmount) * 100) / 100,
-    [price, discountAmount]
+  // Derived values for preview
+  const selectedShowtime = useMemo(
+    () => showtimeOptions.find((s) => String(s.id) === String(showtimeId)),
+    [showtimeId]
   );
 
+  const originalPrice = selectedShowtime?.price ?? 0;
+  const discPct = discountList.find((d) => d.code === discount)?.percent ?? 0;
+  const discountAmount = Math.round((originalPrice * discPct) / 100 * 100) / 100;
+  const total = Math.max(0, Math.round((originalPrice - discountAmount) * 100) / 100);
+
+  /** Step navigation */
+  const next = () => setStep((s) => s + 1);
+  const back = () => setStep((s) => Math.max(0, s - 1));
+
+  /** Validation per step (basic) */
   const canNext = useMemo(() => {
     switch (step) {
+      case 0:
+        return customerName.trim().length > 0;
       case 1:
-        return customerName.trim().length > 0 && isValidEmail(customerEmail);
-      case 2: return !!theaterId;
-      case 3: return !!movieId;
-      case 4: return !!showtimeId;
-      case 5: return !!seatId;
-      case 6: return !!discountType;
-      case 7: return !!paymentMethod;
-      default: return true;
+        return !!theaterId;
+      case 2:
+        return !!movieId;
+      case 3:
+        return !!showtimeId;
+      case 4:
+        return !!seatId;
+      case 5:
+        return !!discount;
+      case 6:
+        return !!payment;
+      default:
+        return true;
     }
-  }, [step, customerName, customerEmail, theaterId, movieId, showtimeId, seatId, discountType, paymentMethod]);
+  }, [step, customerName, theaterId, movieId, showtimeId, seatId, discount, payment]);
 
-  const next = () => setStep(s => Math.min(8, s + 1));
-  const prev = () => setStep(s => Math.max(1, s - 1));
+  /** Renderers per step */
+  const StepHeader = (
+    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18 }}>
+      <h1
+        style={{
+          fontSize: 28,
+          letterSpacing: "0.16em",
+          fontWeight: 700,
+          color: "#111",
+        }}
+      >
+        ADD CUSTOMER
+      </h1>
+      <Link
+        href="/"
+        style={{
+          border: "1px solid #111",
+          borderRadius: 4,
+          padding: "6px 10px",
+          color: "#111",
+          textDecoration: "none",
+        }}
+      >
+        ← Back to Start
+      </Link>
+    </div>
+  );
 
-  async function saveTicket() {
-    setErrorMsg(null);
-    if (!customerName || !isValidEmail(customerEmail) || !showtimeId || !seatId) return;
-    setSaving(true);
+  const Nav = (
+    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
+      <Btn variant="ghost" onClick={back} disabled={step === 0}>
+        Back
+      </Btn>
+      <Btn onClick={next} disabled={!canNext || step >= 7}>
+        Next
+      </Btn>
+    </div>
+  );
 
-    const { data: ticket, error: tErr } = await supabase
-      .from('tickets')
-      .insert({
-        user_id: null,
-        customer_name: customerName,
-        customer_email: customerEmail.trim(),
-        showtime_id: showtimeId,
-        seat_id: seatId,
-        ticket_status: 'RESERVED',
-        discount_type: discountType,
-        ticket_price: price,
-        discount_amount: discountAmount,
-        final_price: finalPrice
-      })
-      .select('ticket_id')
-      .limit(1)
-      .single();
+  const Field: React.FC<
+    React.PropsWithChildren<{ label: string; helper?: string }>
+  > = ({ label, helper, children }) => (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>{label}</div>
+      {children}
+      {helper ? (
+        <div style={{ color: "#666", fontSize: 12, marginTop: 6 }}>{helper}</div>
+      ) : null}
+    </div>
+  );
 
-    if (tErr || !ticket) {
-      setSaving(false);
-      setErrorMsg(tErr?.message || 'Failed to save ticket. The seat may have been taken. Try another seat.');
-      return;
-    }
-    setTicketId(ticket.ticket_id);
+  const Select = (props: JSX.IntrinsicElements["select"]) => (
+    <select
+      {...props}
+      style={{
+        width: "100%",
+        border: "1px solid #111",
+        borderRadius: 4,
+        padding: "10px 12px",
+        background: "#fff",
+        color: "#111",
+      }}
+    />
+  );
 
-    const { error: pErr } = await supabase.from('payments').insert({
-      ticket_id: ticket.ticket_id,
-      amount: finalPrice,
-      payment_method: paymentMethod,
-      payment_status: paymentMethod === 'CASH' ? 'PENDING' : 'PAID'
-    });
+  const Input = (props: JSX.IntrinsicElements["input"]) => (
+    <input
+      {...props}
+      style={{
+        width: "100%",
+        border: "1px solid #111",
+        borderRadius: 4,
+        padding: "10px 12px",
+        background: "#fff",
+        color: "#111",
+      }}
+    />
+  );
 
-    setSaving(false);
-    if (pErr) setErrorMsg(`Ticket saved (ID: ${ticket.ticket_id}) but payment insert failed: ${pErr.message}`);
-  }
+  const StepContent = () => {
+    switch (step) {
+      case 0:
+        return (
+          <>
+            <Field label="Customer Name">
+              <Input
+                placeholder="Enter customer's full name"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+              />
+            </Field>
+            {Nav}
+          </>
+        );
 
-  const chosenShowtime = showtimes.find(s => s.showtime_id === showtimeId);
-  const chosenSeat = seats.find(s => s.seat_id === seatId);
-
-  return (
-    <main className="min-h-screen flex items-center justify-center">
-      <div className="card-1975 max-w-md">
-        <div className="space-y-6">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h1>ADD CUSTOMER</h1>
-            <Link href="/">← Back to Start</Link>
-          </div>
-
-          {errorMsg && (
-            <div style={{ border: '1px solid #b91c1c', padding: '0.75rem', color: '#b91c1c' }}>{errorMsg}</div>
-          )}
-
-          {step === 1 && (
-            <div className="space-y-6">
-              <div>
-                <label className="muted-1975">Customer Name</label>
-                <input
-                  className="input-1975"
-                  value={customerName}
-                  onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="e.g. Juan Dela Cruz"
-                />
-              </div>
-              <div>
-                <label className="muted-1975">Customer Email</label>
-                <input
-                  className="input-1975"
-                  value={customerEmail}
-                  onChange={(e) => setCustomerEmail(e.target.value)}
-                  placeholder="e.g. juan@example.com"
-                  type="email"
-                />
-                {!isValidEmail(customerEmail) && customerEmail.length > 0 && (
-                  <div className="muted-1975" style={{ marginTop: 6 }}>Enter a valid email.</div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Steps 2..7 unchanged from your previous version */}
-          {/* Theater, Movie, Showtime, Seat, Discount, Payment */}
-
-          {step === 2 && (
-            <div>
-              <label className="muted-1975">Theater</label>
-              <select className="select-1975" value={theaterId ?? ''} onChange={(e)=>setTheaterId(e.target.value ? Number(e.target.value): null)}>
+      case 1:
+        return (
+          <>
+            <Field label="Theater">
+              <Select
+                value={theaterId}
+                onChange={(e) => {
+                  setTheaterId(e.target.value);
+                  // reset downstream
+                  setMovieId("");
+                  setShowtimeId("");
+                  setSeatId("");
+                  setSeatLabel("");
+                }}
+              >
                 <option value="">Select theater</option>
-                {theaters.map(t => <option key={t.theater_id} value={t.theater_id}>{t.theater_name} — {t.location}</option>)}
-              </select>
-            </div>
-          )}
-          {step === 3 && (
-            <div>
-              <label className="muted-1975">Movie</label>
-              <select className="select-1975" value={movieId ?? ''} onChange={(e)=>setMovieId(e.target.value ? Number(e.target.value): null)}>
-                <option value="">Select movie</option>
-                {movies.map(m => <option key={m.movie_id} value={m.movie_id}>{m.title}</option>)}
-              </select>
-            </div>
-          )}
-          {step === 4 && (
-            <div>
-              <label className="muted-1975">Showtime</label>
-              <select className="select-1975" value={showtimeId ?? ''} onChange={(e)=>setShowtimeId(e.target.value ? Number(e.target.value): null)}>
-                <option value="">Select showtime</option>
-                {showtimes.map(st => (
-                  <option key={st.showtime_id} value={st.showtime_id}>
-                    {st.show_date} • {st.show_time} • ₱{st.ticket_price} ({st.theater_name})
+                {theaterOptions.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
                   </option>
                 ))}
-              </select>
-              {theaterId && movieId && showtimes.length === 0 && (
-                <div className="muted-1975" style={{ marginTop: 6 }}>
-                  No showtimes found for this selection.
-                </div>
-              )}
-            </div>
-          )}
-          {step === 5 && (
-            <div>
-              <label className="muted-1975">Seat</label>
-              <select className="select-1975" value={seatId ?? ''} onChange={(e)=>setSeatId(e.target.value ? Number(e.target.value): null)}>
+              </Select>
+            </Field>
+            {Nav}
+          </>
+        );
+
+      case 2:
+        return (
+          <>
+            <Field label="Movie">
+              <Select
+                value={movieId}
+                onChange={(e) => {
+                  setMovieId(e.target.value);
+                  setShowtimeId("");
+                  setSeatId("");
+                  setSeatLabel("");
+                }}
+              >
+                <option value="">Select movie</option>
+                {movieOptions.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {Nav}
+          </>
+        );
+
+      case 3:
+        return (
+          <>
+            <Field label="Showtime">
+              <Select
+                value={showtimeId}
+                onChange={(e) => {
+                  setShowtimeId(e.target.value);
+                  setSeatId("");
+                  setSeatLabel("");
+                }}
+              >
+                <option value="">Select showtime</option>
+                {showtimeOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label} {/* e.g., 2025-10-28 10:00 — ₱300.00 */}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {Nav}
+          </>
+        );
+
+      case 4:
+        return (
+          <>
+            <Field label="Seat">
+              <Select
+                value={seatId}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSeatId(v);
+                  const opt = seatOptions.find((s) => String(s.id) === String(v));
+                  setSeatLabel(opt?.label || "");
+                }}
+              >
                 <option value="">Select seat</option>
-                {seats.map(s => <option key={s.seat_id} value={s.seat_id}>{s.seat_no} — {s.seat_type}</option>)}
-              </select>
-            </div>
-          )}
-          {step === 6 && (
-            <div>
-              <label className="muted-1975">Discount</label>
-              <select className="select-1975" value={discountType} onChange={(e)=>setDiscountType(e.target.value as DiscountType)}>
-                <option value="REGULAR">Regular (0%)</option>
-                <option value="PWD">PWD (20%)</option>
-                <option value="SENIOR_CITIZEN">Senior Citizen (20%)</option>
-                <option value="STUDENT">Student (10%)</option>
-              </select>
-            </div>
-          )}
-          {step === 7 && (
-            <div>
-              <label className="muted-1975">Payment Method</label>
-              <select className="select-1975" value={paymentMethod} onChange={(e)=>setPaymentMethod(e.target.value as PaymentMethod)}>
+                {seatOptions.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {Nav}
+          </>
+        );
+
+      case 5:
+        return (
+          <>
+            <Field label="Discount">
+              <Select
+                value={discount}
+                onChange={(e) => setDiscount(e.target.value as DiscountCode)}
+              >
+                {discountList.map((d) => (
+                  <option key={d.code} value={d.code}>
+                    {d.label} {d.percent ? `(${d.percent}%)` : ""}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            {Nav}
+          </>
+        );
+
+      case 6:
+        return (
+          <>
+            <Field label="Payment Method">
+              <Select
+                value={payment}
+                onChange={(e) => setPayment(e.target.value as PaymentMethod)}
+              >
                 <option value="GCASH">GCash</option>
                 <option value="CARD">Card</option>
                 <option value="CASH">Cash</option>
-              </select>
-            </div>
-          )}
+              </Select>
+            </Field>
+            {Nav}
+          </>
+        );
 
-          {step === 8 && (
-            <div>
-              <h2>Ticket Preview</h2>
-              <div className="card-1975" style={{ padding: '1rem', marginTop: '0.5rem' }}>
-                <div><b>Name:</b> {customerName}</div>
-                <div><b>Email:</b> {customerEmail}</div>
-                <div><b>Cinema:</b> {chosenShowtime?.theater_name} — {chosenShowtime?.location}</div>
-                <div><b>Movie:</b> {chosenShowtime?.title}</div>
-                <div><b>Showtime:</b> {chosenShowtime?.show_date} {chosenShowtime?.show_time}</div>
-                <div><b>Seat:</b> {chosenSeat?.seat_no}</div>
-                <div style={{ marginTop: 6 }}><b>Original:</b> ₱{price.toFixed(2)}</div>
-                <div><b>Discount:</b> {discountType} ({discountPct}%) → ₱{(Math.round((price * discountPct / 100) * 100) / 100).toFixed(2)}</div>
-                <div><b>Total:</b> ₱{finalPrice.toFixed(2)}</div>
-                <div><b>Pay via:</b> {paymentMethod}</div>
+      case 7:
+        return (
+          <>
+            <div style={{ marginTop: 6, marginBottom: 12 }}>
+              <div
+                style={{
+                  fontSize: 18,
+                  fontWeight: 800,
+                  letterSpacing: "0.14em",
+                  marginBottom: 10,
+                }}
+              >
+                TICKET PREVIEW
               </div>
-
-              {!ticketId ? (
-                <div style={{ marginTop: '1rem' }}>
-                  <button className="btn-1975" onClick={saveTicket} disabled={saving}>
-                    {saving ? 'Saving…' : 'Confirm & Save Ticket'}
-                  </button>
-                </div>
-              ) : (
-                <div style={{ marginTop: '1rem' }}>
-                  <div style={{ color: '#166534', marginBottom: '0.75rem' }}>
-                    Ticket saved (ID: {ticketId})
-                  </div>
-                  <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                    <Link href="/book"><span className="btn-1975">Add Customer</span></dmin/summary<span className="btn-1975">Show Summary</span></Link>
-                  </div>
-                </div>
-              )}
+              <div
+                style={{
+                  border: "1px solid #ccc",
+                  borderRadius: 6,
+                  padding: "14px 16px",
+                }}
+              >
+                <p>
+                  <strong>Name:</strong> {customerName || "—"}
+                </p>
+                {/* We’ll fill these from fetched values in Step 3 */}
+                <p>
+                  <strong>Cinema:</strong> {/* Theater Name — Location */}
+                </p>
+                <p>
+                  <strong>Movie:</strong> {/* Movie title */}
+                </p>
+                <p>
+                  <strong>Showtime:</strong>{" "}
+                  {selectedShowtime?.label || "—"}
+                </p>
+                <p>
+                  <strong>Seat:</strong> {seatLabel || "—"}
+                </p>
+                <p>
+                  <strong>Original:</strong> ₱{originalPrice.toFixed(2)}
+                </p>
+                <p>
+                  <strong>Discount:</strong>{" "}
+                  {discountList.find((d) => d.code === discount)?.label}{" "}
+                  ({discPct}%) → ₱{discountAmount.toFixed(2)}
+                </p>
+                <p>
+                  <strong>Total:</strong> ₱{total.toFixed(2)}
+                </p>
+                <p>
+                  <strong>Pay via:</strong> {payment}
+                </p>
+              </div>
             </div>
-          )}
 
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <button className="btn-1975" onClick={prev} disabled={step === 1}>Back</button>
-            {step < 8 && (
-              <button className="btn-1975" onClick={next} disabled={!canNext}>Next</button>
-            )}
+            <div style={{ display: "flex", gap: 10, marginTop: 16 }}>
+              <Btn
+                onClick={() => {
+                  // NEXT STEP: will hook this to API to save ticket
+                  alert("In Step 4 we’ll save this to Supabase. For now, UI only.");
+                }}
+              >
+                Confirm &amp; Save Ticket
+              </Btn>
+              <Btn variant="ghost" onClick={back}>
+                Back
+              </Btn>
+            </div>
+          </>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <main
+      style={{
+        minHeight: "100dvh",
+        display: "grid",
+        placeItems: "center",
+        background: "#f6f6f6",
+      }}
+    >
+      <Box>
+        {StepHeader}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr",
+            gap: 8,
+            marginBottom: 12,
+          }}
+        >
+          {/* Simple step indicator */}
+          <div style={{ fontSize: 12, color: "#666" }}>
+            Step {step + 1} of 8
+          </div>
+          <div
+            aria-hidden
+            style={{
+              height: 6,
+              background: "#eaeaea",
+              borderRadius: 999,
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${((step + 1) / 8) * 100}%`,
+                background: "#111",
+                transition: "width .2s ease",
+              }}
+            />
           </div>
         </div>
-      </div>
+
+        <StepContent />
+      </Box>
     </main>
   );
 }

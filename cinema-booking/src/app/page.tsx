@@ -1,20 +1,86 @@
+// src/app/page.tsx
 import Link from "next/link";
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex items-center justify-center">
-      <div className="card-1975 max-w-md">
-        <div className="space-y-6">
-          <h1 className="text-center">Cinema Admin</h1>
-          <p className="text-center muted-1975">What would you like to do?</p>
+    <main
+      style={{
+        minHeight: "100dvh",
+        display: "grid",
+        placeItems: "center",
+        background: "#f6f6f6",
+      }}
+    >
+      <section
+        style={{
+          width: "min(560px, 92vw)",
+          background: "#fff",
+          border: "1px solid #d4d4d4",
+          borderRadius: 6,
+          padding: "36px 40px",
+          boxShadow: "0 2px 0 rgba(0,0,0,0.06)",
+        }}
+      >
+        <h1
+          style={{
+            textAlign: "center",
+            letterSpacing: "0.18em",
+            fontWeight: 700,
+            fontSize: 28,
+            color: "#111",
+            marginBottom: 6,
+          }}
+        >
+          CINEMA ADMIN
+        </h1>
+        <p
+          style={{
+            textAlign: "center",
+            color: "#444",
+            marginBottom: 22,
+          }}
+        >
+          What would you like to do?
+        </p>
 
-          <div className="gap-4" style={{ display: 'flex', flexDirection: 'column' }}>
-            <Link className="btn-1975" href="/book">Add Customer</Link>
-            <Link className="btn-1975" href="/admin/summary">Show Summary</Link>
-            <Link className="btn-1975" href="/reviews/new">Add Review</Link>
-          </div>
+        <div
+          style={{
+            display: "grid",
+            gap: 12,
+            justifyContent: "center",
+          }}
+        >
+          <Link
+            href="/book"
+            style={{
+              padding: "10px 14px",
+              border: "1px solid #222",
+              borderRadius: 4,
+              color: "#111",
+              background: "#fff",
+              width: 150,
+              textAlign: "center",
+            }}
+          >
+            Add Customer
+          </Link>
+
+          <Link
+            href="/admin/summary"
+            style={{
+              padding: "10px 14px",
+              border: "1px solid #222",
+              borderRadius: 4,
+              color: "#111",
+              background: "#fff",
+              width: 150,
+              textAlign: "center",
+            }}
+          >
+            Show Summary
+          </Link>
         </div>
-      </div>
+      </section>
     </main>
   );
 }
