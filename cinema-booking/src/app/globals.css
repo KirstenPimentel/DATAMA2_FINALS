@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Minimal black & white UI */
+:root {
+  --bg: #ffffff;
+  --fg: #000000;
+}
+
+html, body {
+  background: var(--bg);
+  color: var(--fg);
+  font-feature-settings: "ss01" on, "ss02" on;
+  letter-spacing: 0.02em;
+}
