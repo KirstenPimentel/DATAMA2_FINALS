@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // DO NOT add: output: 'export'
+  // Do NOT add: output: 'export'
   reactStrictMode: true,
 };
 

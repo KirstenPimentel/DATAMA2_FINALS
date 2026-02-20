@@ -1,12 +1,9 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import Link from "next/link";
 
 type Showtime = {
   show_date: string;
@@ -156,8 +153,12 @@ export default function TicketPage() {
             DIGITAL TICKET
           </h1>
           <div style={{ display: "flex", gap: 8 }}>
-            <Link href="/admin/summary" className="btn-1975">← Summary</Link>
-            <button className="btn-1975" onClick={() => window.print()}>Print</button>
+            <Link href="/admin/summary" className="btn-1975">
+              ← Summary
+            </Link>
+            <button className="btn-1975" onClick={() => window.print()}>
+              Print
+            </button>
           </div>
         </div>
 
@@ -219,9 +220,7 @@ export default function TicketPage() {
           </div>
         )}
 
-        {!ticket && !loading && !err && (
-          <div className="muted-1975">No ticket found.</div>
-        )}
+        {!ticket && !loading && !err && <div className="muted-1975">No ticket found.</div>}
       </section>
     </main>
   );

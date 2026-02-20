@@ -9,66 +9,28 @@ export default function Home() {
         minHeight: "100dvh",
         display: "grid",
         placeItems: "center",
-        background: "var(--bg)", // dark background
-        color: "var(--fg)", // light text
+        background: "var(--bg)",
+        color: "var(--fg)",
       }}
     >
-      <section
-        className="card-1975"
-        style={{
-          width: "min(560px, 92vw)",
-          textAlign: "center",
-        }}
-      >
-        <h1
-          style={{
-            letterSpacing: "0.18em",
-            fontWeight: 700,
-            fontSize: 24,
-            color: "var(--fg)",
-            marginBottom: 10,
-          }}
-        >
+      <section className="card-1975" style={{ width: "min(560px, 92vw)", textAlign: "center" }}>
+        <h1 style={{ letterSpacing: "0.18em", fontWeight: 700, fontSize: 24, marginBottom: 10 }}>
           CINEMA ADMIN
         </h1>
 
-        <p
-          className="muted-1975"
-          style={{
-            marginBottom: 22,
-          }}
-        >
+        <p className="muted-1975" style={{ marginBottom: 22 }}>
           What would you like to do?
         </p>
 
-        <div
-          style={{
-            display: "grid",
-            gap: 12,
-            justifyContent: "center",
-          }}
-        >
-          {/* ✅ Correct route to the Book flow under /admin/book */}
-          <Link
-            href="/admin/book"
-            className="btn-1975"
-            style={{
-              width: 160,
-              textAlign: "center",
-              borderColor: "var(--border)",
-            }}
-          >
+        <div style={{ display: "grid", gap: 12, justifyContent: "center" }}>
+          <Link href="/admin/book" className="btn-1975" style={{ width: 160, textAlign: "center" }}>
             Add Customer
           </Link>
 
           <Link
             href="/admin/summary"
             className="btn-1975"
-            style={{
-              width: 160,
-              textAlign: "center",
-              borderColor: "var(--border)",
-            }}
+            style={{ width: 160, textAlign: "center" }}
           >
             Show Summary
           </Link>

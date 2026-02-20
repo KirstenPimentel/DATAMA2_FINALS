@@ -1,8 +1,5 @@
 "use client";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
@@ -295,9 +292,15 @@ export default function AdminSummaryPage() {
           </h1>
 
           <div style={{ display: "flex", gap: 8 }}>
-            <Link href="/" className="btn-1975">← Back to Start</Link>
-            <Link href="/admin/book" className="btn-1975">+ Add Customer</Link>
-            <button onClick={load} className="btn-1975">Refresh</button>
+            <Link href="/" className="btn-1975">
+              ← Back to Start
+            </Link>
+            <Link href="/admin/book" className="btn-1975">
+              + Add Customer
+            </Link>
+            <button onClick={load} className="btn-1975">
+              Refresh
+            </button>
           </div>
         </div>
 
@@ -336,7 +339,10 @@ export default function AdminSummaryPage() {
                 <tbody>
                   {table.length === 0 ? (
                     <tr>
-                      <td colSpan={14} style={{ padding: 10, textAlign: "center", color: "var(--muted)" }}>
+                      <td
+                        colSpan={14}
+                        style={{ padding: 10, textAlign: "center", color: "var(--muted)" }}
+                      >
                         No tickets yet.
                       </td>
                     </tr>
@@ -344,7 +350,10 @@ export default function AdminSummaryPage() {
                     table.map((r, idx) => (
                       <tr key={r.ticket_id} className={idx % 2 === 1 ? "table-row-alt" : ""}>
                         <td>
-                          <Link href={`/admin/ticket/${r.ticket_id}`} style={{ textDecoration: "underline" }}>
+                          <Link
+                            href={`/admin/ticket/${r.ticket_id}`}
+                            style={{ textDecoration: "underline" }}
+                          >
                             {r.ticket_id}
                           </Link>
                         </td>
@@ -373,7 +382,7 @@ export default function AdminSummaryPage() {
             </div>
           </div>
 
-          {/* RIGHT: Vertical review buttons rail (compacted buttons, fixed row height) */}
+          {/* RIGHT: Vertical review buttons rail */}
           <div
             style={{
               width: 140,

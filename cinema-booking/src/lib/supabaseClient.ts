@@ -6,7 +6,6 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: false, // no need for login session
+    persistSession: false, // no auth needed for your admin demo
   },
 });
-``

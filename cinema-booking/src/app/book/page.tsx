@@ -1,8 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ChangeEvent,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { supabase } from "@/lib/supabaseClient";
 
 /** ---------------------------
@@ -52,96 +59,112 @@ const showtimeLabel = (st: Showtime) => {
 /** ---------------------------
  *    UI Primitives
  *  --------------------------*/
-const Box: React.FC<React.PropsWithChildren<{ style?: React.CSSProperties }>> = ({
+function Box({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+  return (
+    <section
+      className="card-1975"
+      style={{
+        width: "min(820px, 92vw)",
+        background: "var(--card-bg)",
+        border: "1px solid var(--border)",
+        borderRadius: 6,
+        padding: "28px 32px",
+        ...style,
+      }}
+    >
+      {children}
+    </section>
+  );
+}
+
+function Btn({
+  variant = "primary",
+  onClick,
+  type = "button",
+  disabled,
   children,
-  style,
-}) => (
-  <section
-    className="card-1975"
-    style={{
-      width: "min(820px, 92vw)",
-      background: "var(--card-bg)",
-      border: "1px solid var(--border)",
-      borderRadius: 6,
-      padding: "28px 32px",
-      ...style,
-    }}
-  >
-    {children}
-  </section>
-);
+}: {
+  variant?: "primary" | "ghost";
+  onClick?: () => void;
+  type?: "button" | "submit";
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`btn-1975 ${variant === "primary" ? "btn-1975--filled" : ""}`}
+      style={{
+        border: "1px solid var(--border)",
+        background: variant === "primary" ? "var(--fg)" : "transparent",
+        color: variant === "primary" ? "var(--bg)" : "var(--fg)",
+        padding: "8px 14px",
+        borderRadius: 4,
+        letterSpacing: "0.02em",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
 
-const Btn: React.FC<
-  React.PropsWithChildren<{
-    variant?: "primary" | "ghost";
-    onClick?: () => void;
-    type?: "button" | "submit";
-    disabled?: boolean;
-  }>
-> = ({ variant = "primary", children, onClick, type = "button", disabled }) => (
-  <button
-    type={type}
-    onClick={onClick}
-    disabled={disabled}
-    className={`btn-1975 ${variant === "primary" ? "btn-1975--filled" : ""}`}
-    style={{
-      border: "1px solid var(--border)",
-      background: variant === "primary" ? "var(--fg)" : "transparent",
-      color: variant === "primary" ? "var(--bg)" : "var(--fg)",
-      padding: "8px 14px",
-      borderRadius: 4,
-      letterSpacing: "0.02em",
-      cursor: disabled ? "not-allowed" : "pointer",
-      opacity: disabled ? 0.6 : 1,
-    }}
-  >
-    {children}
-  </button>
-);
-
-const Field: React.FC<React.PropsWithChildren<{ label: string; helper?: string }>> = ({
+function Field({
   label,
   helper,
   children,
-}) => (
-  <div style={{ marginBottom: 16 }}>
-    <div style={{ fontWeight: 600, marginBottom: 8 }}>{label}</div>
-    {children}
-    {helper ? (
-      <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>{helper}</div>
-    ) : null}
-  </div>
-);
+}: {
+  label: string;
+  helper?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontWeight: 600, marginBottom: 8 }}>{label}</div>
+      {children}
+      {helper ? (
+        <div style={{ color: "var(--muted)", fontSize: 12, marginTop: 6 }}>{helper}</div>
+      ) : null}
+    </div>
+  );
+}
 
-const SelectEl = (props: JSX.IntrinsicElements["select"]) => (
-  <select
-    {...props}
-    className="select-1975"
-    style={{
-      width: "100%",
-      border: "1px solid var(--border)",
-      borderRadius: 4,
-      padding: "10px 12px",
-      background: "#0f0f0f",
-      color: "var(--fg)",
-    }}
-  />
-);
+function SelectEl(props: JSX.IntrinsicElements["select"]) {
+  return (
+    <select
+      {...props}
+      className="select-1975"
+      style={{
+        width: "100%",
+        border: "1px solid var(--border)",
+        borderRadius: 4,
+        padding: "10px 12px",
+        background: "#0f0f0f",
+        color: "var(--fg)",
+      }}
+    />
+  );
+}
 
-const InputEl = (props: JSX.IntrinsicElements["input"]) => (
-  <input
-    {...props}
-    className="input-1975"
-    style={{
-      width: "100%",
-      border: "1px solid var(--border)",
-      borderRadius: 4,
-      padding: "10px 12px",
-      background: "#0f0f0f",
-      color: "var(--fg)",
-    }}
-  />
-);
+function InputEl(props: JSX.IntrinsicElements["input"]) {
+  return (
+    <input
+      {...props}
+      className="input-1975"
+      style={{
+        width: "100%",
+        border: "1px solid var(--border)",
+        borderRadius: 4,
+        padding: "10px 12px",
+        background: "#0f0f0f",
+        color: "var(--fg)",
+      }}
+    />
+  );
+}
 
 /** ---------------------------
  *    Page
@@ -280,7 +303,7 @@ export default function BookPage() {
           .order("seat_no", { ascending: true });
         if (e1) throw e1;
 
-        // 3) Tickets for that showtime (no enum filter)
+        // 3) Tickets for that showtime
         const { data: taken, error: e2 } = await supabase
           .from("tickets")
           .select("ticket_id, showtime_id, seat_id")
@@ -586,9 +609,7 @@ export default function BookPage() {
               <InputEl
                 placeholder="Enter customer's full name"
                 value={customerName}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                  setCustomerName(e.target.value)
-                }
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setCustomerName(e.target.value)}
               />
             </Field>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: 18 }}>
@@ -607,7 +628,7 @@ export default function BookPage() {
             <Field label="Theater">
               <SelectEl
                 value={theaterId}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => {
                   setTheaterId(e.target.value);
                   setMovieId("");
                   setShowtimeId("");
@@ -639,7 +660,7 @@ export default function BookPage() {
             <Field label="Movie">
               <SelectEl
                 value={movieId}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => {
                   setMovieId(e.target.value);
                   setShowtimeId("");
                   setSeatId("");
@@ -670,7 +691,7 @@ export default function BookPage() {
             <Field label="Showtime">
               <SelectEl
                 value={showtimeId}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => {
                   setShowtimeId(e.target.value);
                   setSeatId("");
                   setSeatLabel("");
@@ -700,7 +721,7 @@ export default function BookPage() {
             <Field label="Seat">
               <SelectEl
                 value={seatId}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                onChange={(e: ChangeEvent<HTMLSelectElement>) => {
                   const v = e.target.value;
                   setSeatId(v);
                   const opt = seatOptions.find((s) => String(s.id) === String(v));
@@ -731,7 +752,7 @@ export default function BookPage() {
             <Field label="Discount">
               <SelectEl
                 value={discount}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                onChange={(e: ChangeEvent<HTMLSelectElement>) =>
                   setDiscount(e.target.value as DiscountCode)
                 }
               >
@@ -758,7 +779,7 @@ export default function BookPage() {
             <Field label="Payment Method">
               <SelectEl
                 value={payment}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+                onChange={(e: ChangeEvent<HTMLSelectElement>) =>
                   setPayment(e.target.value as PaymentMethod)
                 }
               >

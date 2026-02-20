@@ -5,9 +5,7 @@
   --muted: #b3b3b3;
   --border: #ffffff;
   --card-bg: #0b0b0b;
-
-  /* Shared sizes for Summary table + Action rail */
-  --row-h: 54px; /* rail/table row height */
+  --row-h: 54px; /* shared row height */
 }
 
 /* Base */
@@ -29,13 +27,6 @@ h1, h2, h3 {
   font-weight: 600;
   color: var(--fg);
 }
-
-/* Helpers */
-.min-h-screen { min-height: 100vh; }
-.flex { display: flex; }
-.items-center { align-items: center; }
-.justify-center { justify-content: center; }
-.text-center { text-align: center; }
 
 /* Card */
 .card-1975 {
@@ -114,11 +105,6 @@ button.btn-1975:hover {
 /* Muted */
 .muted-1975 { color: var(--muted); letter-spacing: 0.04em; }
 
-/* Spacing */
-.space-y-6 > * + * { margin-top: 1.5rem; }
-.gap-4 > * + * { margin-top: 1rem; }
-.max-w-md { max-width: 28rem; width: 100%; }
-
 /* Tables (Summary) */
 .table-1975 {
   width: 100%;
@@ -137,10 +123,10 @@ button.btn-1975:hover {
   white-space: nowrap;
   background: #0f0f0f;
 }
-.table-1975 tbody tr { height: var(--row-h); }  /* fixed row height */
+.table-1975 tbody tr { height: var(--row-h); }
 .table-1975 td {
-  padding: 0 12px;           /* no vertical padding so height == --row-h */
-  vertical-align: middle;    /* center text vertically */
+  padding: 0 12px;
+  vertical-align: middle;
   white-space: nowrap;
   color: var(--fg);
   border-top: 1px solid #1f1f1f;
@@ -155,7 +141,7 @@ button.btn-1975:hover {
   border-top: 1px solid var(--border);
 }
 
-/* Right Action rail rows use same height */
+/* Right Action rail */
 .rail-1975-row {
   height: var(--row-h);
   display: flex;
