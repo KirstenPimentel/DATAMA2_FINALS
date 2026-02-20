@@ -39,7 +39,7 @@ type ReviewRow = {
   rating: number;
   review_text: string | null;
   review_date: string | null;
-  email: string | null;
+  email: string | null; // we store customer_name here for uniqueness
 };
 
 const peso = (n: number) =>
@@ -64,8 +64,8 @@ export default function AdminSummaryPage() {
   const railScrollRef = useRef<HTMLDivElement | null>(null);
   const theadRef = useRef<HTMLTableSectionElement | null>(null);
 
-  // exact header height (compensate for 1px border under header in our card/table)
-  const [actionHeaderH, setActionHeaderH] = useState<number>(42);
+  // exact header height (DPR aligned)
+  const [actionHeaderH, setActionHeaderH] = useState<number>(41);
 
   // Sync vertical scroll between table and rail
   useEffect(() => {
@@ -87,30 +87,43 @@ export default function AdminSummaryPage() {
     };
   }, []);
 
-  // Measure <thead> with ResizeObserver so Action header matches exactly
+  // Measure the actual header ROW height and mirror it on the rail header.
   useEffect(() => {
-    if (!theadRef.current) return;
-
-    const update = () => {
+    const measure = () => {
       if (!theadRef.current) return;
-      // Use precise device pixels to avoid sub‑pixel drift; add +1 for the rail top border alignment
-      const h = Math.ceil(theadRef.current.getBoundingClientRect().height) + 1;
-      setActionHeaderH(h);
+      // Prefer the header row (tr) for exact height including th borders
+      const headerRow = theadRef.current.querySelector("tr") as HTMLElement | null;
+      const target = headerRow ?? theadRef.current;
+
+      const rect = target.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+
+      // Device-pixel aligned height (prevents sub-pixel drift like 40.666…)
+      const exact = Math.round(rect.height * dpr) / dpr;
+
+      // Fallback if 0
+      setActionHeaderH(exact || 41);
     };
 
-    update(); // initial
-    const ro = new ResizeObserver(update);
-    ro.observe(theadRef.current);
+    // Initial measure
+    measure();
 
-    // fonts can affect header height; update once fonts are ready
-    if ((document as any).fonts?.ready) {
-      (document as any).fonts.ready.then(update).catch(() => {});
+    // Observe thead size changes (fonts/zoom/responsive)
+    let ro: ResizeObserver | null = null;
+    if ("ResizeObserver" in window && theadRef.current) {
+      ro = new ResizeObserver(measure);
+      ro.observe(theadRef.current);
     }
 
-    window.addEventListener("resize", update);
+    // Measure once fonts are ready (affects height)
+    if ((document as any).fonts?.ready) {
+      (document as any).fonts.ready.then(measure).catch(() => {});
+    }
+
+    window.addEventListener("resize", measure);
     return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", update);
+      window.removeEventListener("resize", measure);
+      if (ro) ro.disconnect();
     };
   }, []);
 
@@ -379,7 +392,8 @@ export default function AdminSummaryPage() {
           >
             <div
               style={{
-                height: actionHeaderH,
+                height: actionHeaderH,          // exact match
+                boxSizing: "border-box",        // include borders
                 background: "#0f0f0f",
                 borderBottom: "1px solid var(--border)",
                 display: "flex",

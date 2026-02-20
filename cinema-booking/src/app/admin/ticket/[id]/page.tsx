@@ -14,7 +14,7 @@ type Showtime = {
 };
 
 type TicketRow = {
-  ticket_id: number; // if your PK is `id`, change here and in .select()
+  ticket_id: number;
   customer_name: string;
   ticket_status: string | null;
   booking_date: string | null;
@@ -53,7 +53,6 @@ export default function TicketPage() {
       setLoading(true);
       setErr(null);
       try {
-        // Ticket + joins
         const { data: tData, error: tErr } = await supabase
           .from("tickets")
           .select(`
@@ -82,7 +81,6 @@ export default function TicketPage() {
         const t = tData as unknown as TicketRow | null;
         setTicket(t);
 
-        // Latest payment
         const { data: pData, error: pErr } = await supabase
           .from("payments")
           .select("ticket_id, amount, payment_method, payment_status, payment_date")

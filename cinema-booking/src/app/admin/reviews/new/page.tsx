@@ -73,7 +73,7 @@ export default function NewReviewPage() {
   const movieTitle = ticket?.showtimes?.movies?.title ?? "—";
   const customerName = ticket?.customer_name ?? "—";
 
-  // Check if a review exists for (movie_id, customer_name) — we store customer name in `email`
+  // Check if a review exists for (movie_id, customer_name) — store name in `email`
   useEffect(() => {
     const checkExisting = async () => {
       if (!movieId || !customerName) return;
@@ -133,11 +133,11 @@ export default function NewReviewPage() {
           movie_id: movieId,
           rating,
           review_text: reviewText || null,
-          email: customerName, // store customer name here for uniqueness
+          email: customerName, // store customer name for uniqueness
         } as any);
         if (error) throw error;
       } else {
-        // Defensive
+        // Defensive: existing full review shouldn't reach here
         throw new Error("Only one review per customer");
       }
 
@@ -173,9 +173,7 @@ export default function NewReviewPage() {
           <h1 style={{ fontSize: 20, letterSpacing: "0.16em", fontWeight: 700, margin: 0 }}>
             ADD REVIEW
           </h1>
-          <Link href="/admin/summary" className="btn-1975">
-            ← Back
-          </Link>
+          <Link href="/admin/summary" className="btn-1975">← Back</Link>
         </div>
 
         {loading && <div style={{ color: "var(--muted)", marginBottom: 10 }}>Loading…</div>}
@@ -206,9 +204,7 @@ export default function NewReviewPage() {
                   {customerName} already submitted a full review (rating + text) for this movie.
                 </div>
                 <div style={{ marginTop: 12 }}>
-                  <Link href="/admin/summary" className="btn-1975">
-                    Back to Summary
-                  </Link>
+                  <Link href="/admin/summary" className="btn-1975">Back to Summary</Link>
                 </div>
               </div>
             ) : (
@@ -247,9 +243,7 @@ export default function NewReviewPage() {
                   >
                     {loading ? "Saving…" : "Save Review"}
                   </button>
-                  <Link href="/admin/summary" className="btn-1975">
-                    Cancel
-                  </Link>
+                  <Link href="/admin/summary" className="btn-1975">Cancel</Link>
                 </div>
               </>
             )}
