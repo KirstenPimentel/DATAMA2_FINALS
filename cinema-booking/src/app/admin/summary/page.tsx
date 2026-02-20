@@ -87,35 +87,26 @@ export default function AdminSummaryPage() {
     };
   }, []);
 
-  // Measure the actual header ROW height and mirror it on the rail header.
+  // Measure the actual header ROW height and mirror it on the rail header (DPR-aware)
   useEffect(() => {
     const measure = () => {
       if (!theadRef.current) return;
-      // Prefer the header row (tr) for exact height including th borders
       const headerRow = theadRef.current.querySelector("tr") as HTMLElement | null;
       const target = headerRow ?? theadRef.current;
-
       const rect = target.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-
-      // Device-pixel aligned height (prevents sub-pixel drift like 40.666…)
-      const exact = Math.round(rect.height * dpr) / dpr;
-
-      // Fallback if 0
+      const exact = Math.round(rect.height * dpr) / dpr; // avoid sub-pixel drift
       setActionHeaderH(exact || 41);
     };
 
-    // Initial measure
     measure();
 
-    // Observe thead size changes (fonts/zoom/responsive)
     let ro: ResizeObserver | null = null;
     if ("ResizeObserver" in window && theadRef.current) {
       ro = new ResizeObserver(measure);
       ro.observe(theadRef.current);
     }
 
-    // Measure once fonts are ready (affects height)
     if ((document as any).fonts?.ready) {
       (document as any).fonts.ready.then(measure).catch(() => {});
     }
@@ -302,7 +293,7 @@ export default function AdminSummaryPage() {
 
           <div style={{ display: "flex", gap: 8 }}>
             <Link href="/" className="btn-1975">← Back to Start</Link>
-            <Link href="/admin/book" className="btn-1975 btn-1975--filled">+ Add Customer</Link>
+            <Link href="/admin/book" className="btn-1975">+ Add Customer</Link>
             <button onClick={load} className="btn-1975">Refresh</button>
           </div>
         </div>
@@ -379,7 +370,7 @@ export default function AdminSummaryPage() {
             </div>
           </div>
 
-          {/* RIGHT: Vertical review buttons rail (header height matches measured thead) */}
+          {/* RIGHT: Vertical review buttons rail (compacted buttons, fixed row height) */}
           <div
             style={{
               width: 140,
@@ -392,8 +383,8 @@ export default function AdminSummaryPage() {
           >
             <div
               style={{
-                height: actionHeaderH,          // exact match
-                boxSizing: "border-box",        // include borders
+                height: actionHeaderH,
+                boxSizing: "border-box",
                 background: "#0f0f0f",
                 borderBottom: "1px solid var(--border)",
                 display: "flex",
@@ -411,29 +402,20 @@ export default function AdminSummaryPage() {
                 <div style={{ padding: 10, color: "var(--muted)", textAlign: "center" }}>—</div>
               ) : (
                 table.map((r) => (
-                  <div
-                    key={`rail-${r.ticket_id}`}
-                    style={{
-                      padding: 8,
-                      borderTop: "1px solid #1f1f1f",
-                      display: "flex",
-                      justifyContent: "center",
-                    }}
-                  >
+                  <div key={`rail-${r.ticket_id}`} className="rail-1975-row">
                     {r.has_full_review ? (
                       <button
-                        className="btn-1975"
+                        className="btn-1975 btn-1975--sm"
                         title="Only one finalized review per customer"
                         disabled
-                        style={{ opacity: 0.6, width: 110 }}
+                        style={{ opacity: 0.6 }}
                       >
                         Reviewed
                       </button>
                     ) : (
                       <Link
                         href={`/admin/reviews/new?ticketId=${r.ticket_id}`}
-                        className="btn-1975"
-                        style={{ width: 110, textAlign: "center" }}
+                        className="btn-1975 btn-1975--sm"
                         title="Add/Complete Review"
                       >
                         Add Review

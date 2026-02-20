@@ -39,7 +39,6 @@ export default function NewReviewPage() {
   const [rating, setRating] = useState<number>(5);
   const [reviewText, setReviewText] = useState<string>("");
 
-  // Load ticket & movie
   useEffect(() => {
     const fetchTicket = async () => {
       if (!ticketIdParam) return;
@@ -73,7 +72,6 @@ export default function NewReviewPage() {
   const movieTitle = ticket?.showtimes?.movies?.title ?? "—";
   const customerName = ticket?.customer_name ?? "—";
 
-  // Check if a review exists for (movie_id, customer_name) — store name in `email`
   useEffect(() => {
     const checkExisting = async () => {
       if (!movieId || !customerName) return;
@@ -117,7 +115,6 @@ export default function NewReviewPage() {
     setErr(null);
     try {
       if (existing && !hasText(existing.review_text)) {
-        // Complete an existing rating-only review → UPDATE
         const { error } = await supabase
           .from("reviews")
           .update({
@@ -128,7 +125,6 @@ export default function NewReviewPage() {
           .eq("review_id", existing.review_id);
         if (error) throw error;
       } else if (!existing) {
-        // Create a new review (rating-only or with text)
         const { error } = await supabase.from("reviews").insert({
           movie_id: movieId,
           rating,
@@ -137,7 +133,6 @@ export default function NewReviewPage() {
         } as any);
         if (error) throw error;
       } else {
-        // Defensive: existing full review shouldn't reach here
         throw new Error("Only one review per customer");
       }
 
