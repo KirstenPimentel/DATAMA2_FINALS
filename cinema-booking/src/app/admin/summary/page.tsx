@@ -63,19 +63,21 @@ export default function AdminSummaryPage() {
   const tableScrollRef = useRef<HTMLDivElement | null>(null);
   const railScrollRef = useRef<HTMLDivElement | null>(null);
   const theadRef = useRef<HTMLTableSectionElement | null>(null);
+
+  // exact header height (compensate for 1px border under header in our card/table)
   const [actionHeaderH, setActionHeaderH] = useState<number>(42);
 
-  // sync scrolling
+  // Sync vertical scroll between table and rail
   useEffect(() => {
     const left = tableScrollRef.current;
     const right = railScrollRef.current;
     if (!left || !right) return;
 
     const onLeft = () => {
-      right.scrollTop = left.scrollTop;
+      if (right.scrollTop !== left.scrollTop) right.scrollTop = left.scrollTop;
     };
     const onRight = () => {
-      left.scrollTop = right.scrollTop;
+      if (left.scrollTop !== right.scrollTop) left.scrollTop = right.scrollTop;
     };
     left.addEventListener("scroll", onLeft);
     right.addEventListener("scroll", onRight);
@@ -83,20 +85,34 @@ export default function AdminSummaryPage() {
       left.removeEventListener("scroll", onLeft);
       right.removeEventListener("scroll", onRight);
     };
-  }, [tableScrollRef.current, railScrollRef.current]);
+  }, []);
 
-  // measure header height
+  // Measure <thead> with ResizeObserver so Action header matches exactly
   useEffect(() => {
-    const updateHeaderHeight = () => {
-      if (theadRef.current) {
-        const h = theadRef.current.getBoundingClientRect().height;
-        if (h && Math.abs(h - actionHeaderH) > 0.5) setActionHeaderH(h);
-      }
+    if (!theadRef.current) return;
+
+    const update = () => {
+      if (!theadRef.current) return;
+      // Use precise device pixels to avoid sub‑pixel drift; add +1 for the rail top border alignment
+      const h = Math.ceil(theadRef.current.getBoundingClientRect().height) + 1;
+      setActionHeaderH(h);
     };
-    updateHeaderHeight();
-    window.addEventListener("resize", updateHeaderHeight);
-    return () => window.removeEventListener("resize", updateHeaderHeight);
-  }, [theadRef.current, actionHeaderH]);
+
+    update(); // initial
+    const ro = new ResizeObserver(update);
+    ro.observe(theadRef.current);
+
+    // fonts can affect header height; update once fonts are ready
+    if ((document as any).fonts?.ready) {
+      (document as any).fonts.ready.then(update).catch(() => {});
+    }
+
+    window.addEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -200,6 +216,7 @@ export default function AdminSummaryPage() {
       const total = r.final_price ?? payment?.amount ?? original;
       const discountAmt = Math.max(0, Number(original) - Number(total));
 
+      // match review by (movie_id, customer_name) via reviews.email
       const reviewKey = movieId != null ? `${movieId}||${norm(r.customer_name)}` : "";
       const review = reviewKey ? reviewsByMovieAndName[reviewKey] : undefined;
 
@@ -223,7 +240,7 @@ export default function AdminSummaryPage() {
         payment_method: payment?.payment_method ?? "—",
         rating: hasRating ? review!.rating : null,
         review_text: hasReviewText ? review!.review_text! : "",
-        has_full_review: hasFullReview, // only disable when both exist
+        has_full_review: hasFullReview, // disable button only when both exist
       };
     });
   }, [rows, payments, reviewsByMovieAndName]);
@@ -271,15 +288,9 @@ export default function AdminSummaryPage() {
           </h1>
 
           <div style={{ display: "flex", gap: 8 }}>
-            <Link href="/" className="btn-1975">
-              ← Back to Start
-            </Link>
-            <Link href="/admin/book" className="btn-1975 btn-1975--filled">
-              + Add Customer
-            </Link>
-            <button onClick={load} className="btn-1975">
-              Refresh
-            </button>
+            <Link href="/" className="btn-1975">← Back to Start</Link>
+            <Link href="/admin/book" className="btn-1975 btn-1975--filled">+ Add Customer</Link>
+            <button onClick={load} className="btn-1975">Refresh</button>
           </div>
         </div>
 
@@ -318,10 +329,7 @@ export default function AdminSummaryPage() {
                 <tbody>
                   {table.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={14}
-                        style={{ padding: 10, textAlign: "center", color: "var(--muted)" }}
-                      >
+                      <td colSpan={14} style={{ padding: 10, textAlign: "center", color: "var(--muted)" }}>
                         No tickets yet.
                       </td>
                     </tr>
@@ -329,10 +337,7 @@ export default function AdminSummaryPage() {
                     table.map((r, idx) => (
                       <tr key={r.ticket_id} className={idx % 2 === 1 ? "table-row-alt" : ""}>
                         <td>
-                          <Link
-                            href={`/admin/ticket/${r.ticket_id}`}
-                            style={{ textDecoration: "underline" }}
-                          >
+                          <Link href={`/admin/ticket/${r.ticket_id}`} style={{ textDecoration: "underline" }}>
                             {r.ticket_id}
                           </Link>
                         </td>
@@ -349,9 +354,7 @@ export default function AdminSummaryPage() {
                         <td>{r.payment_method}</td>
                         <td>{r.rating ? `★ ${r.rating}` : "—"}</td>
                         <td>
-                          <span
-                            style={{ color: r.review_text ? "var(--fg)" : "var(--muted)" }}
-                          >
+                          <span style={{ color: r.review_text ? "var(--fg)" : "var(--muted)" }}>
                             {r.review_text || ""}
                           </span>
                         </td>
@@ -363,7 +366,7 @@ export default function AdminSummaryPage() {
             </div>
           </div>
 
-          {/* RIGHT: Vertical review buttons rail */}
+          {/* RIGHT: Vertical review buttons rail (header height matches measured thead) */}
           <div
             style={{
               width: 140,
@@ -376,7 +379,7 @@ export default function AdminSummaryPage() {
           >
             <div
               style={{
-                height: actionHeaderH, // aligned to actual thead height
+                height: actionHeaderH,
                 background: "#0f0f0f",
                 borderBottom: "1px solid var(--border)",
                 display: "flex",
@@ -428,6 +431,10 @@ export default function AdminSummaryPage() {
             </div>
           </div>
         </div>
+
+        {/* Errors / Loading */}
+        {err && <div style={{ color: "crimson", marginTop: 8 }}>{err}</div>}
+        {loading && <div style={{ color: "var(--muted)", marginTop: 8 }}>Loading…</div>}
       </section>
     </main>
   );
