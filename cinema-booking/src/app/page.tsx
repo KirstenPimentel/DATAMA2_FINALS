@@ -9,8 +9,8 @@ export default function Home() {
         minHeight: "100dvh",
         display: "grid",
         placeItems: "center",
-        background: "var(--bg)",   // <-- dark background
-        color: "var(--fg)",        // <-- white text
+        background: "var(--bg)", // dark background
+        color: "var(--fg)", // light text
       }}
     >
       <section
@@ -48,8 +48,9 @@ export default function Home() {
             justifyContent: "center",
           }}
         >
+          {/* ✅ Correct route to the Book flow under /admin/book */}
           <Link
-            href="/book"
+            href="/admin/book"
             className="btn-1975"
             style={{
               width: 160,
