@@ -105,7 +105,7 @@ export default function NewReviewPage() {
 
   const canSave = useMemo(() => {
     if (!movieId || !customerName) return false;
-    if (hasFullReview) return false; // already finalized
+    if (hasFullReview) return false;
     return rating >= 1 && rating <= 5; // text optional
   }, [movieId, customerName, rating, hasFullReview]);
 

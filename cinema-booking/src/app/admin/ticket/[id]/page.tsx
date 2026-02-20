@@ -153,12 +153,8 @@ export default function TicketPage() {
             DIGITAL TICKET
           </h1>
           <div style={{ display: "flex", gap: 8 }}>
-            <Link href="/admin/summary" className="btn-1975">
-              ← Summary
-            </Link>
-            <button className="btn-1975" onClick={() => window.print()}>
-              Print
-            </button>
+            <Link href="/admin/summary" className="btn-1975">← Summary</Link>
+            <button className="btn-1975" onClick={() => window.print()}>Print</button>
           </div>
         </div>
 
@@ -200,9 +196,7 @@ export default function TicketPage() {
                   <span>{peso(Number(computed.original))}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span>
-                    <strong>Discount</strong> ({computed.discountType})
-                  </span>
+                  <span><strong>Discount</strong> ({computed.discountType})</span>
                   <span>- {peso(Number(computed.discountAmt))}</span>
                 </div>
                 <div style={{ height: 1, background: "var(--border)" }} />
@@ -220,7 +214,9 @@ export default function TicketPage() {
           </div>
         )}
 
-        {!ticket && !loading && !err && <div className="muted-1975">No ticket found.</div>}
+        {!ticket && !loading && !err && (
+          <div className="muted-1975">No ticket found.</div>
+        )}
       </section>
     </main>
   );

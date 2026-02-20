@@ -249,7 +249,7 @@ export default function BookPage() {
 
         if (error) throw error;
 
-        // Filter out past showtimes using local date+time
+        // Filter out past showtimes
         const now = new Date();
         const today = now.toISOString().slice(0, 10); // YYYY-MM-DD
         const nowTime = now.toTimeString().slice(0, 8); // HH:mm:ss
@@ -328,7 +328,7 @@ export default function BookPage() {
     };
   }, [showtimeId, showtimes]);
 
-  /** Dropdown options derived from data */
+  /** Dropdown options */
   const theaterOptions: Option[] = useMemo(
     () =>
       theaters.map((t) => ({

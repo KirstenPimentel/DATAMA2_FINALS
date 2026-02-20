@@ -39,7 +39,7 @@ type ReviewRow = {
   rating: number;
   review_text: string | null;
   review_date: string | null;
-  email: string | null; // we store customer_name here for uniqueness
+  email: string | null; // store customer_name here for uniqueness
 };
 
 const peso = (n: number) =>
@@ -64,7 +64,6 @@ export default function AdminSummaryPage() {
   const railScrollRef = useRef<HTMLDivElement | null>(null);
   const theadRef = useRef<HTMLTableSectionElement | null>(null);
 
-  // exact header height (DPR aligned)
   const [actionHeaderH, setActionHeaderH] = useState<number>(41);
 
   // Sync vertical scroll between table and rail
@@ -87,7 +86,7 @@ export default function AdminSummaryPage() {
     };
   }, []);
 
-  // Measure the actual header ROW height and mirror it on the rail header (DPR-aware)
+  // Measure header height for the Action rail
   useEffect(() => {
     const measure = () => {
       if (!theadRef.current) return;
@@ -95,7 +94,7 @@ export default function AdminSummaryPage() {
       const target = headerRow ?? theadRef.current;
       const rect = target.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
-      const exact = Math.round(rect.height * dpr) / dpr; // avoid sub-pixel drift
+      const exact = Math.round(rect.height * dpr) / dpr;
       setActionHeaderH(exact || 41);
     };
 
@@ -382,7 +381,7 @@ export default function AdminSummaryPage() {
             </div>
           </div>
 
-          {/* RIGHT: Vertical review buttons rail */}
+          {/* RIGHT: Action rail */}
           <div
             style={{
               width: 140,
