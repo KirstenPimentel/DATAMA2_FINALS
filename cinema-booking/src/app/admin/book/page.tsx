@@ -97,7 +97,7 @@ function Btn({
       disabled={disabled}
       className={`btn-1975 ${variant === "primary" ? "btn-1975--filled" : ""}`}
       style={{
-        border: "1px solid var(--border)",
+        border: "1px solid var(--fg)",
         background: variant === "primary" ? "var(--fg)" : "transparent",
         color: variant === "primary" ? "var(--bg)" : "var(--fg)",
         padding: "8px 14px",
@@ -142,7 +142,7 @@ function SelectEl(props: JSX.IntrinsicElements["select"]) {
         border: "1px solid var(--border)",
         borderRadius: 4,
         padding: "10px 12px",
-        background: "#0f0f0f",
+        background: "#f7f4eb",
         color: "var(--fg)",
       }}
     />
@@ -159,7 +159,7 @@ function InputEl(props: JSX.IntrinsicElements["input"]) {
         border: "1px solid var(--border)",
         borderRadius: 4,
         padding: "10px 12px",
-        background: "#0f0f0f",
+        background: "#f7f4eb",
         color: "var(--fg)",
       }}
     />
@@ -249,7 +249,7 @@ export default function BookPage() {
 
         if (error) throw error;
 
-        // Filter out past showtimes
+        // Filter out past showtimes using local date+time
         const now = new Date();
         const today = now.toISOString().slice(0, 10); // YYYY-MM-DD
         const nowTime = now.toTimeString().slice(0, 8); // HH:mm:ss
@@ -328,7 +328,7 @@ export default function BookPage() {
     };
   }, [showtimeId, showtimes]);
 
-  /** Dropdown options */
+  /** Dropdown options derived from data */
   const theaterOptions: Option[] = useMemo(
     () =>
       theaters.map((t) => ({
@@ -568,10 +568,8 @@ export default function BookPage() {
           >
             ADD CUSTOMER
           </h1>
-          <Link href="/">
-            <span className="btn-1975" style={{ borderColor: "var(--border)" }}>
-              ← Back to Start
-            </span>
+          <Link href="/" className="btn-1975" style={{ borderColor: "var(--fg)" }}>
+            ← Back to Start
           </Link>
         </div>
 
@@ -582,7 +580,7 @@ export default function BookPage() {
             aria-hidden
             style={{
               height: 6,
-              background: "#111",
+              background: "#eae6da",
               borderRadius: 999,
               overflow: "hidden",
             }}
@@ -818,6 +816,7 @@ export default function BookPage() {
                   border: "1px solid var(--border)",
                   borderRadius: 6,
                   padding: "14px 16px",
+                  background: "var(--card-bg)",
                 }}
               >
                 <p>

@@ -291,15 +291,9 @@ export default function AdminSummaryPage() {
           </h1>
 
           <div style={{ display: "flex", gap: 8 }}>
-            <Link href="/" className="btn-1975">
-              ← Back to Start
-            </Link>
-            <Link href="/admin/book" className="btn-1975">
-              + Add Customer
-            </Link>
-            <button onClick={load} className="btn-1975">
-              Refresh
-            </button>
+            <Link href="/" className="btn-1975">← Back to Start</Link>
+            <Link href="/admin/book" className="btn-1975">+ Add Customer</Link>
+            <button onClick={load} className="btn-1975">Refresh</button>
           </div>
         </div>
 
@@ -338,10 +332,7 @@ export default function AdminSummaryPage() {
                 <tbody>
                   {table.length === 0 ? (
                     <tr>
-                      <td
-                        colSpan={14}
-                        style={{ padding: 10, textAlign: "center", color: "var(--muted)" }}
-                      >
+                      <td colSpan={14} style={{ padding: 10, textAlign: "center", color: "var(--muted)" }}>
                         No tickets yet.
                       </td>
                     </tr>
@@ -349,10 +340,7 @@ export default function AdminSummaryPage() {
                     table.map((r, idx) => (
                       <tr key={r.ticket_id} className={idx % 2 === 1 ? "table-row-alt" : ""}>
                         <td>
-                          <Link
-                            href={`/admin/ticket/${r.ticket_id}`}
-                            style={{ textDecoration: "underline" }}
-                          >
+                          <Link href={`/admin/ticket/${r.ticket_id}`} style={{ textDecoration: "underline" }}>
                             {r.ticket_id}
                           </Link>
                         </td>
@@ -396,7 +384,7 @@ export default function AdminSummaryPage() {
               style={{
                 height: actionHeaderH,
                 boxSizing: "border-box",
-                background: "#0f0f0f",
+                background: "#f1ede3",
                 borderBottom: "1px solid var(--border)",
                 display: "flex",
                 alignItems: "center",
@@ -408,12 +396,12 @@ export default function AdminSummaryPage() {
               Action
             </div>
 
-            <div ref={railScrollRef} style={{ overflowY: "auto", maxHeight: "70vh" }}>
+            <div ref={railScrollRef} style={{ overflowY: "auto", maxHeight: "70vh", background: "var(--card-bg)" }}>
               {table.length === 0 ? (
                 <div style={{ padding: 10, color: "var(--muted)", textAlign: "center" }}>—</div>
               ) : (
                 table.map((r) => (
-                  <div key={`rail-${r.ticket_id}`} className="rail-1975-row">
+                  <div key={`rail-${r.ticket_id}`} className="rail-1975-row" style={{ background: "transparent" }}>
                     {r.has_full_review ? (
                       <button
                         className="btn-1975 btn-1975--sm"

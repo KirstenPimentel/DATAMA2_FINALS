@@ -23,15 +23,11 @@ export default function Home() {
         </p>
 
         <div style={{ display: "grid", gap: 12, justifyContent: "center" }}>
-          <Link href="/admin/book" className="btn-1975" style={{ width: 160, textAlign: "center" }}>
+          <Link href="/admin/book" className="btn-1975" style={{ width: 180, textAlign: "center" }}>
             Add Customer
           </Link>
 
-          <Link
-            href="/admin/summary"
-            className="btn-1975"
-            style={{ width: 160, textAlign: "center" }}
-          >
+          <Link href="/admin/summary" className="btn-1975" style={{ width: 180, textAlign: "center" }}>
             Show Summary
           </Link>
         </div>

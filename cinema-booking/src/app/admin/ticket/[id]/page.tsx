@@ -152,7 +152,7 @@ export default function TicketPage() {
           <h1 style={{ fontSize: 18, letterSpacing: "0.16em", fontWeight: 700, margin: 0 }}>
             DIGITAL TICKET
           </h1>
-          <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8 }}>
             <Link href="/admin/summary" className="btn-1975">← Summary</Link>
             <button className="btn-1975" onClick={() => window.print()}>Print</button>
           </div>
@@ -167,6 +167,7 @@ export default function TicketPage() {
               border: "1px solid var(--border)",
               borderRadius: 6,
               padding: "16px 18px",
+              background: "var(--card-bg)",
             }}
           >
             <div style={{ display: "grid", gap: 6 }}>

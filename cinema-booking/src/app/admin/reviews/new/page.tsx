@@ -105,7 +105,7 @@ export default function NewReviewPage() {
 
   const canSave = useMemo(() => {
     if (!movieId || !customerName) return false;
-    if (hasFullReview) return false;
+    if (hasFullReview) return false; // already finalized
     return rating >= 1 && rating <= 5; // text optional
   }, [movieId, customerName, rating, hasFullReview]);
 
@@ -168,9 +168,7 @@ export default function NewReviewPage() {
           <h1 style={{ fontSize: 20, letterSpacing: "0.16em", fontWeight: 700, margin: 0 }}>
             ADD REVIEW
           </h1>
-          <Link href="/admin/summary" className="btn-1975">
-            ← Back
-          </Link>
+          <Link href="/admin/summary" className="btn-1975">← Back</Link>
         </div>
 
         {loading && <div style={{ color: "var(--muted)", marginBottom: 10 }}>Loading…</div>}
@@ -201,9 +199,7 @@ export default function NewReviewPage() {
                   {customerName} already submitted a full review (rating + text) for this movie.
                 </div>
                 <div style={{ marginTop: 12 }}>
-                  <Link href="/admin/summary" className="btn-1975">
-                    Back to Summary
-                  </Link>
+                  <Link href="/admin/summary" className="btn-1975">Back to Summary</Link>
                 </div>
               </div>
             ) : (
@@ -235,19 +231,23 @@ export default function NewReviewPage() {
                 </div>
 
                 <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
-                  <button className="btn-1975 btn-1975--filled" onClick={save} disabled={!canSave || loading}>
+                  <button
+                    className="btn-1975 btn-1975--filled"
+                    onClick={save}
+                    disabled={!canSave || loading}
+                  >
                     {loading ? "Saving…" : "Save Review"}
                   </button>
-                  <Link href="/admin/summary" className="btn-1975">
-                    Cancel
-                  </Link>
+                  <Link href="/admin/summary" className="btn-1975">Cancel</Link>
                 </div>
               </>
             )}
           </div>
         )}
 
-        {!ticket && !loading && !err && <div className="muted-1975">No ticket found.</div>}
+        {!ticket && !loading && !err && (
+          <div className="muted-1975">No ticket found.</div>
+        )}
       </section>
     </main>
   );
